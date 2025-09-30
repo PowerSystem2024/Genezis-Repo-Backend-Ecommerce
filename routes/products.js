@@ -12,19 +12,19 @@ const router = express.Router();
 
 // OBTENER TODOS LOS PRODUCTOS
 // GET /api/products
-router.get('/', async (req, res) => {
+router.get('/', async (req, res, next) => {
     try {
         const { rows } = await db.query('SELECT * FROM Products ORDER BY createdAt DESC');
         res.status(200).json(rows);
     } catch (error) {
-        console.error("Error al obtener productos:", error);
-        res.status(500).json({ message: 'Error interno del servidor.' });
+        // Le pasamos el error a nuestro manejador centralizado
+        next(error);
     }
 });
 
 // OBTENER UN SOLO PRODUCTO POR ID
 // GET /api/products/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req, res, next) => {
     try {
         const { id } = req.params;
         const { rows } = await db.query('SELECT * FROM Products WHERE id = $1', [id]);
@@ -35,8 +35,8 @@ router.get('/:id', async (req, res) => {
 
         res.status(200).json(rows[0]);
     } catch (error) {
-        console.error("Error al obtener el producto:", error);
-        res.status(500).json({ message: 'Error interno del servidor.' });
+        // Le pasamos el error a nuestro manejador centralizado
+        next(error);
     }
 });
 
@@ -47,7 +47,7 @@ router.get('/:id', async (req, res) => {
 
 // CREAR UN NUEVO PRODUCTO
 // POST /api/products
-router.post('/', [verifyToken, checkAdmin], async (req, res) => {
+router.post('/', [verifyToken, checkAdmin], async (req, res, next) => {
     try {
         const { name, description, price, stock, coverImageURL, categoryID } = req.body;
 
@@ -66,18 +66,18 @@ router.post('/', [verifyToken, checkAdmin], async (req, res) => {
         res.status(201).json({ message: 'Producto creado exitosamente.', product: rows[0] });
 
     } catch (error) {
-        console.error("Error al crear producto:", error);
-        res.status(500).json({ message: 'Error interno del servidor.' });
+        // Le pasamos el error a nuestro manejador centralizado
+        next(error);
     }
 });
 
 // ACTUALIZAR UN PRODUCTO EXISTENTE
 // PUT /api/products/:id
-router.put('/:id', [verifyToken, checkAdmin], async (req, res) => {
+router.put('/:id', [verifyToken, checkAdmin], async (req, res, next) => {
     try {
         const { id } = req.params;
         const { name, description, price, stock, coverImageURL, categoryID } = req.body;
-        
+
         if (!name || !price || !stock || !categoryID) {
             return res.status(400).json({ message: 'Nombre, precio, stock y categoryID son obligatorios.' });
         }
@@ -98,14 +98,14 @@ router.put('/:id', [verifyToken, checkAdmin], async (req, res) => {
         res.status(200).json({ message: 'Producto actualizado exitosamente.', product: rows[0] });
 
     } catch (error) {
-        console.error("Error al actualizar producto:", error);
-        res.status(500).json({ message: 'Error interno del servidor.' });
+        // Le pasamos el error a nuestro manejador centralizado
+        next(error);
     }
 });
 
 // ELIMINAR UN PRODUCTO
 // DELETE /api/products/:id
-router.delete('/:id', [verifyToken, checkAdmin], async (req, res) => {
+router.delete('/:id', [verifyToken, checkAdmin], async (req, res, next) => {
     try {
         const { id } = req.params;
         const result = await db.query('DELETE FROM Products WHERE id = $1', [id]);
@@ -118,12 +118,8 @@ router.delete('/:id', [verifyToken, checkAdmin], async (req, res) => {
         res.status(200).json({ message: 'Producto eliminado exitosamente.' });
 
     } catch (error) {
-        // Manejar error de clave foránea (si el producto está en una orden)
-        if (error.code === '23503') { // Código de error de PostgreSQL para foreign key violation
-            return res.status(409).json({ message: 'No se puede eliminar el producto porque está asociado a una orden existente.' });
-        }
-        console.error("Error al eliminar producto:", error);
-        res.status(500).json({ message: 'Error interno del servidor.' });
+        // Le pasamos el error a nuestro manejador centralizado
+        next(error);
     }
 });
 

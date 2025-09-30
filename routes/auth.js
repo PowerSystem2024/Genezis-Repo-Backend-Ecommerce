@@ -8,7 +8,7 @@ const router = express.Router();
 
 // --- RUTA DE REGISTRO ---
 // URL: POST /api/auth/register
-router.post('/register', async (req, res) => {
+router.post('/register', async (req, res, next) => {
     try {
         const { firstName, lastName, email, password } = req.body;
 
@@ -41,14 +41,14 @@ router.post('/register', async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Error en el registro:", error);
-        res.status(500).json({ message: 'Error interno del servidor.' });
+        // Le pasamos el error a nuestro manejador centralizado
+        next(error);
     }
 });
 
 // --- RUTA DE INICIO DE SESIÓN ---
 // URL: POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', async (req, res, next) => {
     try {
         const { email, password } = req.body;
 
@@ -89,8 +89,8 @@ router.post('/login', async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Error en el inicio de sesión:", error);
-        res.status(500).json({ message: 'Error interno del servidor.' });
+        // Le pasamos el error a nuestro manejador centralizado
+        next(error);
     }
 });
 

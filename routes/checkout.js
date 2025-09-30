@@ -7,15 +7,15 @@ const verifyToken = require('../middleware/authMiddleware');
 const router = express.Router();
 
 // CAMBIO 2: Crear una instancia del cliente con tus credenciales
-const client = new MercadoPagoConfig({ 
-    accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN 
+const client = new MercadoPagoConfig({
+    accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN
 });
 
 // Crear la ruta de checkout
 // POST /api/checkout/create_preference
-router.post('/create_preference', verifyToken, async (req, res) => {
+router.post('/create_preference', verifyToken, async (req, res, next) => {
     const { items: cartItems } = req.body;
-    
+
     if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
         return res.status(400).json({ message: 'El carrito está vacío.' });
     }
@@ -43,7 +43,7 @@ router.post('/create_preference', verifyToken, async (req, res) => {
                 currency_id: 'ARS' // Ajusta según tu país
             };
         });
-        
+
         // CAMBIO 3: La creación de la preferencia ahora se hace a través de una instancia de Preference
         const preference = new Preference(client);
 
@@ -63,8 +63,8 @@ router.post('/create_preference', verifyToken, async (req, res) => {
         res.status(201).json({ init_point: result.init_point });
 
     } catch (error) {
-        console.error("Error al crear la preferencia de pago:", error);
-        res.status(500).json({ message: 'Error interno del servidor al crear la preferencia de pago.' });
+        // Le pasamos el error a nuestro manejador centralizado
+        next(error);
     }
 });
 
