@@ -3,6 +3,10 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors'); // <-- 1. IMPORTAR CORS
 
+// --- 1. IMPORTAR SWAGGER ---
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./swaggerConfig'); // Importa nuestra configuración
+
 // Importación de rutas
 const authRoutes = require('./routes/auth');
 const productRoutes = require('./routes/products');
@@ -21,6 +25,10 @@ app.use(cors());
 
 // Middleware para que Express entienda JSON en el cuerpo de las peticiones
 app.use(express.json());
+
+// --- 2. AÑADIR LA RUTA DE DOCUMENTACIÓN ---
+// Esta ruta servirá la interfaz de usuario de Swagger
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // --- RUTAS ---
 app.use('/api/auth', authRoutes);
