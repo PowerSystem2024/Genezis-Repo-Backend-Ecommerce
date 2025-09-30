@@ -103,7 +103,7 @@ Asegúrate de tener instalado el siguiente software:
 
 5.  **Inicia el servidor:**
     ```bash
-    npm start
+    node server.js
     ```
 
     Deberías ver el siguiente mensaje en tu consola, indicando que el servidor está listo:
