@@ -1,5 +1,5 @@
 // Archivo: middleware/validator.js
-const { body, validationResult } = require('express-validator');
+const { body, param, validationResult } = require('express-validator');
 
 // Middleware reutilizable para manejar los errores de validación
 const validate = (req, res, next) => {
@@ -62,10 +62,19 @@ const productValidationRules = () => {
     ];
 };
 
+// NUEVA FUNCIÓN: Reglas de validación para un parámetro 'id' en la URL
+const idParamValidationRules = () => {
+    return [
+        // Verifica que el parámetro 'id' sea un número entero
+        param('id').isInt().withMessage('El ID del parámetro debe ser un número entero válido.'),
+    ];
+};
+
 
 module.exports = {
     validate,
     registerValidationRules,
     loginValidationRules,
     productValidationRules,
+    idParamValidationRules,
 };
