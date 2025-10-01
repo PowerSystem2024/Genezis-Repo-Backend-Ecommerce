@@ -53,7 +53,18 @@ app.get('/', (req, res) => {
 // IMPORTANTE: Este debe ser el ÚLTIMO app.use()
 // Es una "red de seguridad" que atrapa cualquier error que ocurra en las rutas.
 app.use((err, req, res, next) => {
-    console.error(err.stack); // Muestra el error detallado en la consola del servidor
+    // Imprimimos varias líneas para asegurarnos de que el log sea claro
+    console.error("--- ¡ERROR ATRAPADO POR EL MANEJADOR CENTRAL! ---");
+
+    // Imprimimos el mensaje del error, que es lo más importante
+    console.error("Mensaje del Error:", err.message);
+
+    // Imprimimos el stack completo para tener todo el contexto
+    console.error("Stack Trace Completo:", err.stack);
+    
+    console.error("--- FIN DEL REPORTE DE ERROR ---");
+
+    // Enviamos la misma respuesta genérica al cliente
     res.status(500).json({ message: 'Ha ocurrido un error inesperado en el servidor.' });
 });
 
