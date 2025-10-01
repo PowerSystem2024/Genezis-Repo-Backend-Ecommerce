@@ -105,11 +105,19 @@ router.post('/create_preference', verifyToken, async (req, res, next) => {
         const result = await preference.create({
             body: {
                 items: preferenceItems,
+                
                 back_urls: {
-                    success: 'http://localhost:5173/payment-success',
-                    failure: 'http://localhost:5173/payment-failure',
-                    pending: ''
+                    // URL a la que el usuario es redirigido tras un pago exitoso.
+                    // ¡Debe ser una URL pública!
+                    success: 'https://www.youtube.com/@Genezis-TUP', // <-- CAMBIAR ESTO por la URL del frontend
+                    
+                    // URL para pagos fallidos.
+                    failure: 'https://www.youtube.com/@Genezis-TUP', // <-- CAMBIAR ESTO por la URL del frontend
+
+                    // URL para pagos pendientes. La dejamos apuntando a la misma de fallo por ahora.
+                    pending: 'https://www.youtube.com/@Genezis-TUP',
                 },
+               
                 auto_return: 'approved',
             }
         });
