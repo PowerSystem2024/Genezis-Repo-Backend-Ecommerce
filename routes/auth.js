@@ -74,6 +74,7 @@ const router = express.Router();
  */
 router.post('/register', registerValidationRules(), validate, async (req, res, next) => {
     try {
+        // Recibimos los datos del frontend en camelCase (firstName, lastName)
         const { firstName, lastName, email, password } = req.body;
 
         const existingUser = await db.query('SELECT * FROM Users WHERE email = $1', [email]);
@@ -84,21 +85,33 @@ router.post('/register', registerValidationRules(), validate, async (req, res, n
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
+        // --- INICIO DE LA MODIFICACIÓN ---
+        // La consulta SQL ahora usa los nombres de columna correctos de la base de datos (firstname, lastname)
         const newUserQuery = `
-            INSERT INTO Users (firstName, lastName, email, password, role)
+            INSERT INTO Users (firstname, lastname, email, password, role)
             VALUES ($1, $2, $3, $4, 'customer')
-            RETURNING id, "firstName", "lastName", email, role, "createdAt", "updatedAt";
+            RETURNING id, firstname, lastname, email, role, createdat, updatedat;
         `;
         const newUserResult = await db.query(newUserQuery, [firstName, lastName, email, hashedPassword]);
-        const newUser = newUserResult.rows[0];
-
-        // Limpiamos el objeto de respuesta por si acaso, aunque RETURNING es seguro.
-        delete newUser.password;
+        const newUserFromDB = newUserResult.rows[0];
+        
+        // Mapeamos el resultado de la base de datos (lowercase) a un objeto con camelCase
+        // para mantener la consistencia en la respuesta de la API para el frontend.
+        const userResponse = {
+            id: newUserFromDB.id,
+            firstName: newUserFromDB.firstname,
+            lastName: newUserFromDB.lastname,
+            email: newUserFromDB.email,
+            role: newUserFromDB.role,
+            createdAt: newUserFromDB.createdat,
+            updatedAt: newUserFromDB.updatedat
+        };
 
         res.status(201).json({
             message: 'Usuario registrado exitosamente.',
-            user: newUser
+            user: userResponse
         });
+        // --- FIN DE LA MODIFICACIÓN ---
 
     } catch (error) {
         next(error);
@@ -180,23 +193,21 @@ router.post('/login', loginValidationRules(), validate, async (req, res, next) =
     try {
         const { email, password } = req.body;
 
-        // Pedimos todos los campos de la tabla de usuarios
         const userResult = await db.query('SELECT * FROM Users WHERE email = $1', [email]);
         if (userResult.rows.length === 0) {
             return res.status(401).json({ message: 'Credenciales inválidas.' });
         }
         
-        // El paquete 'pg' ya devuelve un objeto JavaScript plano, así que podemos usarlo directamente.
-        const userObject = userResult.rows[0];
+        const userObjectFromDB = userResult.rows[0];
 
-        const isPasswordCorrect = await bcrypt.compare(password, userObject.password);
+        const isPasswordCorrect = await bcrypt.compare(password, userObjectFromDB.password);
         if (!isPasswordCorrect) {
             return res.status(401).json({ message: 'Credenciales inválidas.' });
         }
 
         const payload = {
-            userId: userObject.id,
-            role: userObject.role
+            userId: userObjectFromDB.id,
+            role: userObjectFromDB.role
         };
 
         const token = jwt.sign(
@@ -205,19 +216,26 @@ router.post('/login', loginValidationRules(), validate, async (req, res, next) =
             { expiresIn: '1h' }
         );
 
-        // --- INICIO DE LA MODIFICACIÓN ---
-        // 1. Tomamos el objeto de usuario completo.
-        // 2. Eliminamos explícitamente la propiedad 'password' antes de enviarla.
-        //    Esta es la forma más segura y mantenible.
-        delete userObject.password;
+        // Mapeamos la respuesta de la DB a camelCase para consistencia con el frontend
+        const userResponse = {
+            id: userObjectFromDB.id,
+            firstName: userObjectFromDB.firstname,
+            lastName: userObjectFromDB.lastname,
+            email: userObjectFromDB.email,
+            role: userObjectFromDB.role,
+            createdAt: userObjectFromDB.createdat,
+            updatedAt: userObjectFromDB.updatedat
+        };
+        
+        // Eliminamos la contraseña del objeto que se enviará al frontend (aunque ya no debería estar si no la pedimos en el SELECT)
+        // Por seguridad, es una buena práctica hacerlo explícitamente.
+        // Pero como 'userResponse' se crea sin la contraseña, no es necesario un delete.
 
-        // 3. Enviamos la respuesta enriquecida con el token y el objeto de usuario limpio.
         res.status(200).json({
             message: 'Inicio de sesión exitoso.',
             token: token,
-            user: userObject // <-- Envía el objeto completo y limpio
+            user: userResponse
         });
-        // --- FIN DE LA MODIFICACIÓN ---
 
     } catch (error) {
         next(error);
