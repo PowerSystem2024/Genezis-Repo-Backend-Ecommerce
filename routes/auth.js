@@ -87,13 +87,17 @@ router.post('/register', registerValidationRules(), validate, async (req, res, n
         const newUserQuery = `
             INSERT INTO Users (firstName, lastName, email, password, role)
             VALUES ($1, $2, $3, $4, 'customer')
-            RETURNING id, email, role, createdAt;
+            RETURNING id, "firstName", "lastName", email, role, "createdAt", "updatedAt";
         `;
-        const newUser = await db.query(newUserQuery, [firstName, lastName, email, hashedPassword]);
+        const newUserResult = await db.query(newUserQuery, [firstName, lastName, email, hashedPassword]);
+        const newUser = newUserResult.rows[0];
+
+        // Limpiamos el objeto de respuesta por si acaso, aunque RETURNING es seguro.
+        delete newUser.password;
 
         res.status(201).json({
             message: 'Usuario registrado exitosamente.',
-            user: newUser.rows[0]
+            user: newUser
         });
 
     } catch (error) {
@@ -110,7 +114,7 @@ router.post('/register', registerValidationRules(), validate, async (req, res, n
  *   post:
  *     summary: Inicia sesión y devuelve un token JWT junto con los datos del usuario.
  *     tags: [Auth]
- *     description: El usuario envía sus credenciales (email y password). El servidor las valida y, si son correctas, genera un JSON Web Token (JWT) con una validez de 1 hora y devuelve los datos públicos del usuario.
+ *     description: El usuario envía sus credenciales (email y password). El servidor las valida y, si son correctas, genera un JSON Web Token (JWT) con una validez de 1 hora y devuelve todos los datos públicos del usuario.
  *     requestBody:
  *       required: true
  *       content:
@@ -146,24 +150,25 @@ router.post('/register', registerValidationRules(), validate, async (req, res, n
  *                   example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInJvbGUiOiJhZG1pbiIsImlhdCI6MTYxNzQwNjQwMCwiZXhwIjoxNjE3NDA5MDAwfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
  *                 user:
  *                   type: object
- *                   description: Datos públicos del usuario autenticado.
+ *                   description: Todos los datos públicos del usuario autenticado.
  *                   properties:
  *                     id:
  *                       type: integer
- *                       example: 1
  *                     firstName:
  *                       type: string
- *                       example: Admin
  *                     lastName:
  *                       type: string
- *                       example: Genezis
  *                     email:
  *                       type: string
  *                       format: email
- *                       example: admin@example.com
  *                     role:
  *                       type: string
- *                       example: admin
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
  *       '401':
  *         description: Credenciales inválidas.
  *       '422':
@@ -175,20 +180,23 @@ router.post('/login', loginValidationRules(), validate, async (req, res, next) =
     try {
         const { email, password } = req.body;
 
+        // Pedimos todos los campos de la tabla de usuarios
         const userResult = await db.query('SELECT * FROM Users WHERE email = $1', [email]);
         if (userResult.rows.length === 0) {
             return res.status(401).json({ message: 'Credenciales inválidas.' });
         }
-        const user = userResult.rows[0];
+        
+        // El paquete 'pg' ya devuelve un objeto JavaScript plano, así que podemos usarlo directamente.
+        const userObject = userResult.rows[0];
 
-        const isPasswordCorrect = await bcrypt.compare(password, user.password);
+        const isPasswordCorrect = await bcrypt.compare(password, userObject.password);
         if (!isPasswordCorrect) {
             return res.status(401).json({ message: 'Credenciales inválidas.' });
         }
 
         const payload = {
-            userId: user.id,
-            role: user.role
+            userId: userObject.id,
+            role: userObject.role
         };
 
         const token = jwt.sign(
@@ -198,20 +206,16 @@ router.post('/login', loginValidationRules(), validate, async (req, res, next) =
         );
 
         // --- INICIO DE LA MODIFICACIÓN ---
-        // Creamos un objeto de usuario seguro para enviar al frontend, excluyendo la contraseña.
-        const userDataForFrontend = {
-            id: user.id,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            email: user.email,
-            role: user.role
-        };
+        // 1. Tomamos el objeto de usuario completo.
+        // 2. Eliminamos explícitamente la propiedad 'password' antes de enviarla.
+        //    Esta es la forma más segura y mantenible.
+        delete userObject.password;
 
-        // Enviamos la respuesta enriquecida con el token Y el objeto de usuario.
+        // 3. Enviamos la respuesta enriquecida con el token y el objeto de usuario limpio.
         res.status(200).json({
             message: 'Inicio de sesión exitoso.',
             token: token,
-            user: userDataForFrontend
+            user: userObject // <-- Envía el objeto completo y limpio
         });
         // --- FIN DE LA MODIFICACIÓN ---
 
