@@ -101,7 +101,7 @@ Sigue estos pasos para tener una copia del proyecto funcionando en tu máquina l
 
 5.  **Inicia el servidor:**
     ```bash
-    npm start
+    node server.js
     ```
     El servidor estará disponible en `http://localhost:3000`.
 
