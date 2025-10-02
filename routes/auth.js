@@ -102,15 +102,15 @@ router.post('/register', registerValidationRules(), validate, async (req, res, n
 });
 
 
-// --- Bloque de Documentación para la Ruta de Login ---
+// --- Bloque de Documentación para la Ruta de Login (ACTUALIZADO) ---
 
 /**
  * @swagger
  * /api/auth/login:
  *   post:
- *     summary: Inicia sesión y devuelve un token JWT para autorizar futuras peticiones.
+ *     summary: Inicia sesión y devuelve un token JWT junto con los datos del usuario.
  *     tags: [Auth]
- *     description: El usuario envía sus credenciales (email y password). El servidor las valida y, si son correctas, genera un JSON Web Token (JWT) con una validez de 1 hora.
+ *     description: El usuario envía sus credenciales (email y password). El servidor las valida y, si son correctas, genera un JSON Web Token (JWT) con una validez de 1 hora y devuelve los datos públicos del usuario.
  *     requestBody:
  *       required: true
  *       content:
@@ -144,6 +144,26 @@ router.post('/register', registerValidationRules(), validate, async (req, res, n
  *                   type: string
  *                   description: Token JWT para ser usado en el header 'Authorization' como 'Bearer <token>'.
  *                   example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInJvbGUiOiJhZG1pbiIsImlhdCI6MTYxNzQwNjQwMCwiZXhwIjoxNjE3NDA5MDAwfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+ *                 user:
+ *                   type: object
+ *                   description: Datos públicos del usuario autenticado.
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 1
+ *                     firstName:
+ *                       type: string
+ *                       example: Admin
+ *                     lastName:
+ *                       type: string
+ *                       example: Genezis
+ *                     email:
+ *                       type: string
+ *                       format: email
+ *                       example: admin@example.com
+ *                     role:
+ *                       type: string
+ *                       example: admin
  *       '401':
  *         description: Credenciales inválidas.
  *       '422':
@@ -177,10 +197,23 @@ router.post('/login', loginValidationRules(), validate, async (req, res, next) =
             { expiresIn: '1h' }
         );
 
+        // --- INICIO DE LA MODIFICACIÓN ---
+        // Creamos un objeto de usuario seguro para enviar al frontend, excluyendo la contraseña.
+        const userDataForFrontend = {
+            id: user.id,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            role: user.role
+        };
+
+        // Enviamos la respuesta enriquecida con el token Y el objeto de usuario.
         res.status(200).json({
             message: 'Inicio de sesión exitoso.',
-            token: token
+            token: token,
+            user: userDataForFrontend
         });
+        // --- FIN DE LA MODIFICACIÓN ---
 
     } catch (error) {
         next(error);
