@@ -62,7 +62,7 @@ router.get('/', async (req, res, next) => {
         `;
         const { rows } = await db.query(query);
         res.status(200).json(rows);
-    } catch (error)
+    } catch (error){
         next(error);
     }
 });
