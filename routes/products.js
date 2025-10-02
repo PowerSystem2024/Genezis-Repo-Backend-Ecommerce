@@ -77,10 +77,50 @@ router.get('/', async (req, res, next) => {
  *       '500':
  *         description: Error interno del servidor.
  */
+
+router.get('/', async (req, res, next) => {
+    try {
+        // --- MODIFICACIÓN CLAVE: Usamos LEFT JOIN para incluir el nombre de la categoría ---
+        const query = `
+            SELECT 
+                p.id, 
+                p.name, 
+                p.description, 
+                p.price, 
+                p.stock, 
+                p.coverImageURL, 
+                p.categoryID, 
+                c.name AS categoryName  -- Creamos un alias 'categoryName' para el nombre de la categoría
+            FROM Products p
+            LEFT JOIN Categories c ON p.categoryID = c.id
+            ORDER BY p.createdAt DESC;
+        `;
+        const { rows } = await db.query(query);
+        res.status(200).json(rows);
+    } catch (error) {
+        next(error);
+    }
+});
+
 router.get('/:id', idParamValidationRules(), validate, async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { rows } = await db.query('SELECT * FROM Products WHERE id = $1', [id]);
+        // --- MODIFICACIÓN CLAVE: Usamos LEFT JOIN aquí también ---
+        const query = `
+            SELECT 
+                p.id, 
+                p.name, 
+                p.description, 
+                p.price, 
+                p.stock, 
+                p.coverImageURL, 
+                p.categoryID, 
+                c.name AS categoryName
+            FROM Products p
+            LEFT JOIN Categories c ON p.categoryID = c.id
+            WHERE p.id = $1;
+        `;
+        const { rows } = await db.query(query, [id]);
 
         if (rows.length === 0) {
             return res.status(404).json({ message: 'Producto no encontrado.' });

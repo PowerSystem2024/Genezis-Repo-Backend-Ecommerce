@@ -70,6 +70,13 @@ const idParamValidationRules = () => {
     ];
 };
 
+const categoryValidationRules = () => {
+    return [
+        body('name').trim().notEmpty().withMessage('El nombre de la categoría es obligatorio.'),
+        body('description').optional().trim(), // La descripción es opcional
+    ];
+};
+
 
 module.exports = {
     validate,
@@ -77,4 +84,5 @@ module.exports = {
     loginValidationRules,
     productValidationRules,
     idParamValidationRules,
+    categoryValidationRules
 };

@@ -10,6 +10,7 @@ const swaggerSpec = require('./swaggerConfig'); // Importa nuestra configuració
 // Importación de rutas
 const authRoutes = require('./routes/auth');
 const productRoutes = require('./routes/products');
+const categoryRoutes = require('./routes/categories');
 const checkoutRoutes = require('./routes/checkout');
 
 // Importación de middlewares
@@ -33,6 +34,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // --- RUTAS ---
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/categories', categoryRoutes);
 app.use('/api/checkout', checkoutRoutes);
 
 // --- EJEMPLO DE RUTA PROTEGIDA ---
