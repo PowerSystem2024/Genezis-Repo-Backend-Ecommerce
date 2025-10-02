@@ -1,4 +1,4 @@
-// Archivo: routes/products.js
+// Archivo: routes/products.js (Versión Corregida y Final)
 const express = require('express');
 const db = require('../db');
 const verifyToken = require('../middleware/authMiddleware');
@@ -22,7 +22,7 @@ const router = express.Router();
  * @swagger
  * /api/products:
  *   get:
- *     summary: Obtiene una lista de todos los productos.
+ *     summary: Obtiene una lista de todos los productos, incluyendo el nombre de su categoría.
  *     tags: [Products]
  *     responses:
  *       '200':
@@ -34,22 +34,35 @@ const router = express.Router();
  *               items:
  *                 type: object
  *                 properties:
- *                   id:
- *                     type: integer
- *                   name:
- *                     type: string
- *                   price:
- *                     type: number
- *                   stock:
- *                     type: integer
+ *                   id: { type: integer }
+ *                   name: { type: string }
+ *                   price: { type: number }
+ *                   stock: { type: integer }
+ *                   categoryID: { type: integer, nullable: true }
+ *                   categoryName: { type: string, nullable: true, description: "Nombre de la categoría asociada." }
  *       '500':
  *         description: Error interno del servidor.
  */
 router.get('/', async (req, res, next) => {
     try {
-        const { rows } = await db.query('SELECT * FROM Products ORDER BY createdAt DESC');
+        // Esta es la única y correcta consulta que une las tablas Products y Categories
+        const query = `
+            SELECT 
+                p.id, 
+                p.name, 
+                p.description, 
+                p.price, 
+                p.stock, 
+                p.coverImageURL, 
+                p.categoryID, 
+                c.name AS categoryName
+            FROM Products p
+            LEFT JOIN Categories c ON p.categoryID = c.id
+            ORDER BY p.createdAt DESC;
+        `;
+        const { rows } = await db.query(query);
         res.status(200).json(rows);
-    } catch (error) {
+    } catch (error)
         next(error);
     }
 });
@@ -58,7 +71,7 @@ router.get('/', async (req, res, next) => {
  * @swagger
  * /api/products/{id}:
  *   get:
- *     summary: Obtiene los detalles de un solo producto por su ID.
+ *     summary: Obtiene los detalles de un solo producto por su ID, incluyendo el nombre de su categoría.
  *     tags: [Products]
  *     parameters:
  *       - in: path
@@ -77,35 +90,9 @@ router.get('/', async (req, res, next) => {
  *       '500':
  *         description: Error interno del servidor.
  */
-
-router.get('/', async (req, res, next) => {
-    try {
-        // --- MODIFICACIÓN CLAVE: Usamos LEFT JOIN para incluir el nombre de la categoría ---
-        const query = `
-            SELECT 
-                p.id, 
-                p.name, 
-                p.description, 
-                p.price, 
-                p.stock, 
-                p.coverImageURL, 
-                p.categoryID, 
-                c.name AS categoryName  -- Creamos un alias 'categoryName' para el nombre de la categoría
-            FROM Products p
-            LEFT JOIN Categories c ON p.categoryID = c.id
-            ORDER BY p.createdAt DESC;
-        `;
-        const { rows } = await db.query(query);
-        res.status(200).json(rows);
-    } catch (error) {
-        next(error);
-    }
-});
-
 router.get('/:id', idParamValidationRules(), validate, async (req, res, next) => {
     try {
         const { id } = req.params;
-        // --- MODIFICACIÓN CLAVE: Usamos LEFT JOIN aquí también ---
         const query = `
             SELECT 
                 p.id, 
