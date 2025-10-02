@@ -94,6 +94,7 @@ router.post('/create_preference', verifyToken, async (req, res, next) => {
                 throw new Error(`El producto con ID ${item.productId} no fue encontrado.`);
             }
             return {
+                id: product.id.toString(),
                 title: product.name,
                 unit_price: Number(product.price),
                 quantity: item.quantity,
@@ -119,6 +120,7 @@ router.post('/create_preference', verifyToken, async (req, res, next) => {
                 },
                
                 auto_return: 'approved',
+                external_reference: req.user.userId.toString(),
             }
         });
 

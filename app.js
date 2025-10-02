@@ -12,6 +12,7 @@ const authRoutes = require('./routes/auth');
 const productRoutes = require('./routes/products');
 const categoryRoutes = require('./routes/categories');
 const checkoutRoutes = require('./routes/checkout');
+const orderRoutes = require('./routes/orders');
 
 // Importación de middlewares
 const verifyToken = require('./middleware/authMiddleware');
@@ -36,6 +37,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/checkout', checkoutRoutes);
+app.use('/api/orders', orderRoutes);
 
 // --- EJEMPLO DE RUTA PROTEGIDA ---
 app.get('/api/profile', verifyToken, (req, res) => {
