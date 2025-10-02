@@ -1,4 +1,4 @@
-// Archivo: db.js (Versión Final para Despliegue)
+// Archivo: db.js (Versión Corregida y Final)
 const { Pool } = require('pg');
 require('dotenv').config();
 
@@ -17,6 +17,13 @@ if (process.env.NODE_ENV === 'production') {
 
 const pool = new Pool(config);
 
+// --- MODIFICACIÓN CLAVE AQUÍ ---
 module.exports = {
+    // Esta función ya la tenías
     query: (text, params) => pool.query(text, params),
+    
+    // ¡ESTA ES LA FUNCIÓN QUE FALTABA!
+    // Permite que otras partes de nuestra app "saquen" una conexión
+    // del pool para manejar transacciones.
+    getClient: () => pool.connect(),
 };
