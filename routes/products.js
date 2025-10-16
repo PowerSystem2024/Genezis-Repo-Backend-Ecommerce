@@ -3,6 +3,10 @@ const express = require('express');
 const db = require('../db');
 const verifyToken = require('../middleware/authMiddleware');
 const checkAdmin = require('../middleware/adminMiddleware');
+
+const upload = require('../middleware/upload');
+const cloudinary = require('../config/cloudinaryConfig');
+
 const {
     productValidationRules,
     idParamValidationRules,
@@ -279,6 +283,186 @@ router.delete('/:id', [verifyToken, checkAdmin], idParamValidationRules(), valid
                 message: 'No se puede eliminar el producto porque está asociado a una o más órdenes existentes.'
             });
         }
+        next(error);
+    }
+});
+
+/**
+ * @swagger
+ * /api/products/{id}/image:
+ *   put:
+ *     summary: Actualiza la imagen de portada de un producto (Solo Administradores).
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: El ID del producto cuya imagen de portada se actualizará.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               productImage:
+ *                 type: string
+ *                 format: binary
+ *                 description: El archivo de imagen para la portada del producto.
+ *     responses:
+ *       '200':
+ *         description: Imagen de portada actualizada exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string }
+ *                 coverImageUrl: { type: string }
+ *       '400':
+ *         description: No se proporcionó un archivo.
+ *       '401':
+ *         description: No autorizado.
+ *       '403':
+ *         description: Prohibido (rol no es admin).
+ *       '404':
+ *         description: Producto no encontrado.
+ *       '500':
+ *         description: Error interno del servidor.
+ */
+// RUTA PARA IMAGEN DE PORTADA
+router.put('/:id/image', [verifyToken, checkAdmin, upload.single('productImage')], async (req, res, next) => {
+    try {
+        if (!req.file) return res.status(400).json({ message: 'No se ha proporcionado ningún archivo.' });
+        
+        const { id } = req.params;
+        cloudinary.uploader.upload_stream({ folder: 'genezis_products', transformation: [{ width: 800, height: 600, crop: 'limit' }] },
+            async (error, result) => {
+                if (error) return next(new Error('Error al subir la imagen del producto.'));
+                
+                // Nombre de columna exacto: coverimageurl
+                const query = `UPDATE products SET coverimageurl = $1 WHERE id = $2 RETURNING coverimageurl;`;
+                const { rows } = await db.query(query, [result.secure_url, id]);
+                if (rows.length === 0) return res.status(404).json({ message: 'Producto no encontrado.' });
+
+                res.status(200).json({ message: 'Imagen de portada actualizada.', coverImageUrl: rows[0].coverimageurl });
+            }
+        ).end(req.file.buffer);
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * @swagger
+ * /api/products/{id}/gallery:
+ *   post:
+ *     summary: Añade una nueva imagen a la galería de un producto (Solo Administradores).
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: El ID del producto al que se añadirá la imagen.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               galleryImage:
+ *                 type: string
+ *                 format: binary
+ *                 description: El archivo de imagen para la galería.
+ *               altText:
+ *                 type: string
+ *                 description: (Opcional) Texto alternativo para la imagen.
+ *     responses:
+ *       '201':
+ *         description: Imagen añadida a la galería exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string }
+ *                 image: { type: object }
+ *       '400':
+ *         description: No se proporcionó un archivo.
+ *       '401':
+ *         description: No autorizado.
+ *       '403':
+ *         description: Prohibido (rol no es admin).
+ *       '500':
+ *         description: Error interno del servidor.
+ */
+// RUTA PARA AÑADIR A LA GALERÍA
+router.post('/:id/gallery', [verifyToken, checkAdmin, upload.single('galleryImage')], async (req, res, next) => {
+    try {
+        if (!req.file) return res.status(400).json({ message: 'No se ha proporcionado ningún archivo.' });
+
+        const { id: productId } = req.params;
+        const { altText } = req.body;
+        cloudinary.uploader.upload_stream({ folder: 'genezis_products_gallery' },
+            async (error, result) => {
+                if (error) return next(new Error('Error al subir la imagen de la galería.'));
+
+                // Nombres de columna exactos: imageurl, alttext, productid
+                const query = `INSERT INTO productimages (imageurl, alttext, productid) VALUES ($1, $2, $3) RETURNING *;`;
+                const { rows } = await db.query(query, [result.secure_url, altText || '', productId]);
+
+                res.status(201).json({ message: 'Imagen añadida a la galería.', image: rows[0] });
+            }
+        ).end(req.file.buffer);
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * @swagger
+ * /api/products/gallery/{imageId}:
+ *   delete:
+ *     summary: Elimina una imagen de la galería de un producto (Solo Administradores).
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: imageId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: El ID de la imagen a eliminar (de la tabla productimages).
+ *     responses:
+ *       '200':
+ *         description: Imagen eliminada de la galería exitosamente.
+ *       '401':
+ *         description: No autorizado.
+ *       '403':
+ *         description: Prohibido (rol no es admin).
+ *       '404':
+ *         description: Imagen no encontrada en la galería.
+ *       '500':
+ *         description: Error interno del servidor.
+ */
+// RUTA PARA ELIMINAR DE LA GALERÍA
+router.delete('/gallery/:imageId', [verifyToken, checkAdmin], async (req, res, next) => {
+    try {
+        const { imageId } = req.params;
+        const result = await db.query('DELETE FROM productimages WHERE id = $1', [imageId]);
+        if (result.rowCount === 0) return res.status(404).json({ message: 'Imagen no encontrada en la galería.' });
+        res.status(200).json({ message: 'Imagen eliminada de la galería.' });
+    } catch (error) {
         next(error);
     }
 });

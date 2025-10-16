@@ -13,6 +13,7 @@ const productRoutes = require('./routes/products');
 const categoryRoutes = require('./routes/categories');
 const checkoutRoutes = require('./routes/checkout');
 const orderRoutes = require('./routes/orders');
+const userRoutes = require('./routes/users');
 
 // Importación de middlewares
 const verifyToken = require('./middleware/authMiddleware');
@@ -34,6 +35,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // --- RUTAS ---
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/checkout', checkoutRoutes);
