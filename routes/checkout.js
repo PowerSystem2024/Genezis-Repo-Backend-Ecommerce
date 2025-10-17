@@ -1,4 +1,4 @@
-// Archivo: routes/checkout.js
+// Archivo: routes/checkout.js (con validación de stock implementada)
 const express = require('express');
 const { MercadoPagoConfig, Preference } = require('mercadopago');
 const db = require('../db');
@@ -25,7 +25,7 @@ const client = new MercadoPagoConfig({
  *     tags: [Checkout]
  *     security:
  *       - bearerAuth: []
- *     description: Recibe un array de productos y sus cantidades, valida los precios con la base de datos y genera una URL de pago (init_point) de Mercado Pago. Requiere autenticación.
+ *     description: Recibe un array de productos y sus cantidades, valida que haya stock suficiente, y luego genera una URL de pago (init_point) de Mercado Pago.
  *     requestBody:
  *       required: true
  *       content:
@@ -56,18 +56,12 @@ const client = new MercadoPagoConfig({
  *     responses:
  *       '201':
  *         description: Preferencia de pago creada exitosamente.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 init_point:
- *                   type: string
- *                   description: La URL a la que se debe redirigir al usuario para completar el pago.
  *       '400':
  *         description: Petición incorrecta (ej. el carrito está vacío).
  *       '401':
  *         description: No autorizado (token inválido o no proporcionado).
+ *       '409':
+ *         description: Conflicto (ej. stock insuficiente para uno de los productos).
  *       '500':
  *         description: Error interno al crear la preferencia de pago.
  */
@@ -79,10 +73,38 @@ router.post('/create_preference', verifyToken, async (req, res, next) => {
     }
 
     try {
+        // --- 1. MODIFICACIÓN: Añadimos 'stock' a la consulta SQL ---
         const productIds = cartItems.map(item => item.productId);
-        const query = `SELECT id, name, price FROM Products WHERE id = ANY($1::int[])`;
+        const query = `SELECT id, name, price, stock FROM Products WHERE id = ANY($1::int[])`;
         const { rows: productsFromDB } = await db.query(query, [productIds]);
 
+        // --- 2. IMPLEMENTACIÓN: Bucle de validación de stock ---
+        // Este bucle se ejecuta ANTES de intentar crear la preferencia de pago.
+        for (const item of cartItems) {
+            const product = productsFromDB.find(p => p.id === item.productId);
+            
+            // Verificamos si el producto existe (por si se eliminó mientras el usuario compraba)
+            if (!product) {
+                return res.status(404).json({ message: `El producto con ID ${item.productId} ya no está disponible.` });
+            }
+
+            // La validación clave: ¿hay suficiente stock?
+            if (product.stock < item.quantity) {
+                // Si no hay stock, devolvemos un error 409 Conflict y detenemos todo.
+                return res.status(409).json({ 
+                    message: `Stock insuficiente para el producto: "${product.name}".`,
+                    details: {
+                        productId: product.id,
+                        availableStock: product.stock,
+                        requestedQuantity: item.quantity
+                    }
+                });
+            }
+        }
+        // --- FIN DE LA VALIDACIÓN ---
+
+        // Si el código llega hasta aquí, significa que hay stock para todos los productos.
+        // Ahora, el resto del código puede ejecutarse con normalidad.
         const productMap = productsFromDB.reduce((acc, product) => {
             acc[product.id] = product;
             return acc;
@@ -91,6 +113,7 @@ router.post('/create_preference', verifyToken, async (req, res, next) => {
         const preferenceItems = cartItems.map(item => {
             const product = productMap[item.productId];
             if (!product) {
+                // Esta comprobación es redundante ahora, pero la dejamos por seguridad.
                 throw new Error(`El producto con ID ${item.productId} no fue encontrado.`);
             }
             return {
@@ -106,19 +129,11 @@ router.post('/create_preference', verifyToken, async (req, res, next) => {
         const result = await preference.create({
             body: {
                 items: preferenceItems,
-                
                 back_urls: {
-                    // URL a la que el usuario es redirigido tras un pago exitoso.
-                    // ¡Debe ser una URL pública!
-                    success: 'https://www.youtube.com/@Genezis-TUP', // <-- CAMBIAR ESTO por la URL del frontend
-                    
-                    // URL para pagos fallidos.
-                    failure: 'https://www.youtube.com/@Genezis-TUP', // <-- CAMBIAR ESTO por la URL del frontend
-
-                    // URL para pagos pendientes. La dejamos apuntando a la misma de fallo por ahora.
+                    success: 'https://www.youtube.com/@Genezis-TUP',
+                    failure: 'https://www.youtube.com/@Genezis-TUP',
                     pending: 'https://www.youtube.com/@Genezis-TUP',
                 },
-               
                 auto_return: 'approved',
                 external_reference: req.user.userId.toString(),
             }
