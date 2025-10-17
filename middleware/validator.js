@@ -77,6 +77,29 @@ const categoryValidationRules = () => {
     ];
 };
 
+// Reglas para actualizar los detalles del perfil de usuario
+const updateUserDetailsRules = () => {
+    return [
+        body('firstName')
+            .trim()
+            .notEmpty().withMessage('El nombre es obligatorio.')
+            .isString().withMessage('El nombre debe ser una cadena de texto.'),
+        body('lastName')
+            .trim()
+            .notEmpty().withMessage('El apellido es obligatorio.')
+            .isString().withMessage('El apellido debe ser una cadena de texto.'),
+    ];
+};
+
+// Reglas para actualizar la contraseña del usuario
+const updateUserPasswordRules = () => {
+    return [
+        // Podríamos añadir una validación para 'currentPassword' aquí para mayor seguridad
+        body('newPassword')
+            .isLength({ min: 6 }).withMessage('La nueva contraseña debe tener al menos 6 caracteres.'),
+    ];
+};
+
 
 module.exports = {
     validate,
@@ -84,5 +107,7 @@ module.exports = {
     loginValidationRules,
     productValidationRules,
     idParamValidationRules,
-    categoryValidationRules
+    categoryValidationRules,
+    updateUserDetailsRules,
+    updateUserPasswordRules
 };
