@@ -1,10 +1,9 @@
-// Archivo: routes/users.js
+// Archivo: routes/users.js (Versión Final sin Imagen de Perfil)
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 const verifyToken = require('../middleware/authMiddleware');
-const upload = require('../middleware/upload');
-const cloudinary = require('../config/cloudinaryConfig');
+
 const {
     updateUserDetailsRules,
     updateUserPasswordRules,
@@ -13,7 +12,14 @@ const {
 
 const router = express.Router();
 
-// --- INICIO DE LA NUEVA IMPLEMENTACIÓN ---
+/**
+ * @swagger
+ * tags:
+ *   name: Users
+ *   description: Endpoints para la gestión de datos de usuarios (nombre, apellido y contraseña).
+ */
+
+
 /**
  * @swagger
  * /api/users/profile/details:
@@ -64,7 +70,7 @@ router.patch(
                 UPDATE users 
                 SET firstname = $1, lastname = $2, updatedat = CURRENT_TIMESTAMP
                 WHERE id = $3
-                RETURNING id, firstname, lastname, email, role, "profileImageUrl", createdat, updatedat;
+                RETURNING id, firstname, lastname, email, role, createdat, updatedat;
             `;
             const { rows } = await db.query(query, [firstName, lastName, userId]);
 
@@ -79,7 +85,6 @@ router.patch(
                 lastName: rows[0].lastname,
                 email: rows[0].email,
                 role: rows[0].role,
-                profileImageUrl: rows[0].profileImageUrl,
                 createdAt: rows[0].createdat,
                 updatedAt: rows[0].updatedat
             };
@@ -152,6 +157,5 @@ router.patch(
         }
     }
 );
-// --- FIN DE LA NUEVA IMPLEMENTACIÓN ---
 
 module.exports = router;
