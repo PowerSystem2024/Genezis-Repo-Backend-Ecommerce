@@ -130,8 +130,8 @@ router.post('/create_preference', verifyToken, async (req, res, next) => {
             body: {
                 items: preferenceItems,
                 back_urls: {
-                    success: 'https://www.youtube.com/@Genezis-TUP',
-                    failure: 'https://www.youtube.com/@Genezis-TUP',
+                    success: 'https://gamerstore-bice.vercel.app/payment-success',
+                    failure: 'https://gamerstore-bice.vercel.app/payment-failure',
                     pending: 'https://www.youtube.com/@Genezis-TUP',
                 },
                 auto_return: 'approved',
