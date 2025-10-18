@@ -31,6 +31,21 @@ const mpClient = new MercadoPagoConfig({
  *     responses:
  *       '200':
  *         description: Lista de órdenes con los nombres de los clientes.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id: { type: integer }
+ *                   firstname: { type: string }
+ *                   lastname: { type: string }
+ *                   email: { type: string }
+ *                   totalamount: { type: number }
+ *                   status: { type: string }
+ *                   paymentgatewayid: { type: string }
+ *                   createdat: { type: string, format: date-time }
  */
 router.get('/', [verifyToken, checkAdmin], async (req, res, next) => {
     try {
@@ -39,8 +54,10 @@ router.get('/', [verifyToken, checkAdmin], async (req, res, next) => {
                 o.id,
                 u.firstname,
                 u.lastname,
+                u.email,
                 o.totalamount,
                 o.status,
+                o.paymentgatewayid,
                 o.createdat
             FROM orders o
             JOIN users u ON o.userid = u.id
@@ -131,8 +148,6 @@ router.get('/:id', verifyToken, async (req, res, next) => {
         next(error);
     }
 });
-
-// --- RUTAS PARA GESTIÓN MANUAL DE ÓRDENES (ADMIN) ---
 
 /**
  * @swagger
@@ -246,15 +261,13 @@ router.put('/:id/status', [verifyToken, checkAdmin], async (req, res, next) => {
     }
 });
 
-// --- ENDPOINT DE WEBHOOK PARA MERCADO PAGO ---
-
 /**
  * @swagger
  * /api/orders/webhook/mercadopago:
  *   post:
  *     summary: Webhook para recibir notificaciones de pago de Mercado Pago.
  *     tags: [Orders]
- *     description: Este endpoint es para uso exclusivo de la API de Mercado Pago. No debe ser llamado directamente desde el frontend.
+ *     description: Este endpoint es para uso exclusivo de la API de Mercado Pago. No debe ser llamado directamente.
  *     requestBody:
  *       description: Payload enviado por Mercado Pago.
  *       required: true
@@ -265,8 +278,6 @@ router.put('/:id/status', [verifyToken, checkAdmin], async (req, res, next) => {
  *     responses:
  *       '200':
  *         description: Notificación recibida.
- *       '500':
- *         description: Error al procesar la notificación.
  */
 router.post('/webhook/mercadopago', async (req, res) => {
     const { type, data } = req.body;
