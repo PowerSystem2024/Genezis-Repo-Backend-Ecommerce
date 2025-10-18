@@ -49,8 +49,6 @@ const mpClient = new MercadoPagoConfig({
  */
 router.get('/', [verifyToken, checkAdmin], async (req, res, next) => {
     try {
-        // --- INICIO DE LA MODIFICACIÓN ---
-        // Se añaden o.paymentgatewayid y u.email a la consulta para que la respuesta sea completa.
         const query = `
             SELECT 
                 o.id,
@@ -65,8 +63,6 @@ router.get('/', [verifyToken, checkAdmin], async (req, res, next) => {
             JOIN users u ON o.userid = u.id
             ORDER BY o.createdat DESC;
         `;
-        // --- FIN DE LA MODIFICACIÓN ---
-
         const { rows } = await db.query(query);
         res.status(200).json(rows);
     } catch (error) {
@@ -153,8 +149,6 @@ router.get('/:id', verifyToken, async (req, res, next) => {
     }
 });
 
-// --- RUTAS PARA GESTIÓN MANUAL DE ÓRDENES (ADMIN) ---
-
 /**
  * @swagger
  * /api/orders:
@@ -170,11 +164,27 @@ router.get('/:id', verifyToken, async (req, res, next) => {
  *           schema:
  *             type: object
  *             properties:
- *               userId: { type: integer }, status: { type: string, example: "paid" },
- *               totalAmount: { type: number }, paymentGatewayId: { type: string, example: "Transferencia-123" },
- *               items: { type: array, items: { type: object, properties: { 
- *                 productId: { type: integer }, quantity: { type: integer }, priceAtPurchase: { type: number }
- *               }}}
+ *               userId:
+ *                 type: integer
+ *               status:
+ *                 type: string
+ *                 example: "paid"
+ *               totalAmount:
+ *                 type: number
+ *               paymentGatewayId:
+ *                 type: string
+ *                 example: "Transferencia-123"
+ *               items:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     productId:
+ *                       type: integer
+ *                     quantity:
+ *                       type: integer
+ *                     priceAtPurchase:
+ *                       type: number
  *     responses:
  *       '201':
  *         description: Orden creada exitosamente.
@@ -226,7 +236,9 @@ router.post('/', [verifyToken, checkAdmin], async (req, res, next) => {
  *           schema:
  *             type: object
  *             properties:
- *               status: { type: string, enum: ["pending", "paid", "shipped", "cancelled"] }
+ *               status:
+ *                 type: string
+ *                 enum: ["pending", "paid", "shipped", "cancelled"]
  *     responses:
  *       '200':
  *         description: Estado de la orden actualizado.
@@ -249,8 +261,6 @@ router.put('/:id/status', [verifyToken, checkAdmin], async (req, res, next) => {
     }
 });
 
-// --- ENDPOINT DE WEBHOOK PARA MERCADO PAGO ---
-
 /**
  * @swagger
  * /api/orders/webhook/mercadopago:
@@ -261,7 +271,10 @@ router.put('/:id/status', [verifyToken, checkAdmin], async (req, res, next) => {
  *     requestBody:
  *       description: Payload enviado por Mercado Pago.
  *       required: true
- *       content: { "application/json": { schema: { type: object } } }
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
  *     responses:
  *       '200':
  *         description: Notificación recibida.
