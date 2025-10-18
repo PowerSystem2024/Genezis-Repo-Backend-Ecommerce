@@ -3,7 +3,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 const verifyToken = require('../middleware/authMiddleware');
-const checkAdmin = require('../middleware/adminMiddleware'); // <-- 1. IMPORTAR checkAdmin
+const checkAdmin = require('../middleware/adminMiddleware');
 
 const {
     updateUserDetailsRules,
@@ -52,11 +52,12 @@ router.patch(
             const { firstName, lastName } = req.body;
             const userId = req.user.userId;
 
+            // --- CORRECCIÓN: Eliminada "profileImageUrl" de la sentencia RETURNING ---
             const query = `
                 UPDATE users 
                 SET firstname = $1, lastname = $2, updatedat = CURRENT_TIMESTAMP
                 WHERE id = $3
-                RETURNING id, firstname, lastname, email, role, createdat, updatedat, "isActive", "profileImageUrl";
+                RETURNING id, firstname, lastname, email, role, createdat, updatedat, "isActive";
             `;
             const { rows } = await db.query(query, [firstName, lastName, userId]);
 
@@ -64,10 +65,11 @@ router.patch(
                 return res.status(404).json({ message: 'Usuario no encontrado.' });
             }
             
+            // --- CORRECCIÓN: Eliminada "profileImageUrl" del objeto de respuesta ---
             const userResponse = {
                 id: rows[0].id, firstName: rows[0].firstname, lastName: rows[0].lastname,
                 email: rows[0].email, role: rows[0].role, createdAt: rows[0].createdat,
-                updatedAt: rows[0].updatedat, isActive: rows[0].isActive, profileImageUrl: rows[0].profileImageUrl
+                updatedAt: rows[0].updatedat, isActive: rows[0].isActive
             };
 
             res.status(200).json({
@@ -133,7 +135,7 @@ router.patch(
     }
 );
 
-// --- 2. AÑADIR NUEVAS RUTAS DE ADMINISTRACIÓN ---
+// --- RUTAS DE ADMINISTRACIÓN ---
 
 /**
  * @swagger
@@ -146,26 +148,12 @@ router.patch(
  *     responses:
  *       '200':
  *         description: Lista de usuarios obtenida exitosamente.
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   id: { type: integer }
- *                   firstname: { type: string }
- *                   lastname: { type: string }
- *                   email: { type: string }
- *                   role: { type: string }
- *                   isActive: { type: boolean }
- *                   createdat: { type: string, format: date-time }
  */
 router.get('/', [verifyToken, checkAdmin], async (req, res, next) => {
     try {
-        // Seleccionamos todos los usuarios pero excluimos las contraseñas
+        // --- CORRECCIÓN: Eliminada "profileImageUrl" de la sentencia SELECT ---
         const query = `
-            SELECT id, firstname, lastname, email, role, "isActive", createdat, updatedat, "profileImageUrl"
+            SELECT id, firstname, lastname, email, role, "isActive", createdat, updatedat
             FROM users
             ORDER BY id ASC;
         `;
@@ -193,17 +181,12 @@ router.get('/', [verifyToken, checkAdmin], async (req, res, next) => {
  *     responses:
  *       '200':
  *         description: Usuario archivado exitosamente.
- *       '403':
- *         description: No se puede desactivar a uno mismo.
- *       '404':
- *         description: Usuario no encontrado.
  */
 router.delete('/:id', [verifyToken, checkAdmin], async (req, res, next) => {
     try {
         const adminUserId = req.user.userId;
         const userIdToDelete = parseInt(req.params.id, 10);
 
-        // Medida de seguridad: Un administrador no puede desactivarse a sí mismo.
         if (adminUserId === userIdToDelete) {
             return res.status(403).json({ message: 'No puedes desactivar tu propia cuenta de administrador.' });
         }
