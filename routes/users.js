@@ -1,8 +1,9 @@
-// Archivo: routes/users.js (Versión Final sin Imagen de Perfil)
+// Archivo: routes/users.js
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 const verifyToken = require('../middleware/authMiddleware');
+const checkAdmin = require('../middleware/adminMiddleware'); // <-- 1. IMPORTAR checkAdmin
 
 const {
     updateUserDetailsRules,
@@ -16,9 +17,10 @@ const router = express.Router();
  * @swagger
  * tags:
  *   name: Users
- *   description: Endpoints para la gestión de datos de usuarios (nombre, apellido y contraseña).
+ *   description: Endpoints para la gestión de datos de usuarios.
  */
 
+// --- RUTAS DE GESTIÓN DE PERFIL PROPIO (Cualquier usuario logueado) ---
 
 /**
  * @swagger
@@ -36,27 +38,11 @@ const router = express.Router();
  *             type: object
  *             required: [firstName, lastName]
  *             properties:
- *               firstName:
- *                 type: string
- *                 example: Lionel
- *               lastName:
- *                 type: string
- *                 example: Scaloni
+ *               firstName: { type: string, example: "Lionel" }
+ *               lastName: { type: string, example: "Scaloni" }
  *     responses:
  *       '200':
  *         description: Datos del usuario actualizados exitosamente.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 user:
- *                   type: object
- *                   description: "El objeto de usuario actualizado (sin la contraseña)."
- *       '401':
- *         description: No autorizado.
- *       '422':
- *         description: Error de validación en los datos de entrada.
  */
 router.patch(
     '/profile/details',
@@ -70,23 +56,18 @@ router.patch(
                 UPDATE users 
                 SET firstname = $1, lastname = $2, updatedat = CURRENT_TIMESTAMP
                 WHERE id = $3
-                RETURNING id, firstname, lastname, email, role, createdat, updatedat;
+                RETURNING id, firstname, lastname, email, role, createdat, updatedat, "isActive", "profileImageUrl";
             `;
             const { rows } = await db.query(query, [firstName, lastName, userId]);
 
             if (rows.length === 0) {
                 return res.status(404).json({ message: 'Usuario no encontrado.' });
             }
-
-            // Mapeamos a camelCase para consistencia en la respuesta
+            
             const userResponse = {
-                id: rows[0].id,
-                firstName: rows[0].firstname,
-                lastName: rows[0].lastname,
-                email: rows[0].email,
-                role: rows[0].role,
-                createdAt: rows[0].createdat,
-                updatedAt: rows[0].updatedat
+                id: rows[0].id, firstName: rows[0].firstname, lastName: rows[0].lastname,
+                email: rows[0].email, role: rows[0].role, createdAt: rows[0].createdat,
+                updatedAt: rows[0].updatedat, isActive: rows[0].isActive, profileImageUrl: rows[0].profileImageUrl
             };
 
             res.status(200).json({
@@ -119,14 +100,9 @@ router.patch(
  *                 type: string
  *                 format: password
  *                 description: "La nueva contraseña (mínimo 6 caracteres)."
- *                 example: "nuevaContraseñaSegura123"
  *     responses:
  *       '200':
  *         description: Contraseña actualizada exitosamente.
- *       '401':
- *         description: No autorizado.
- *       '422':
- *         description: Error de validación (la nueva contraseña no cumple los requisitos).
  */
 router.patch(
     '/profile/password',
@@ -136,7 +112,6 @@ router.patch(
             const { newPassword } = req.body;
             const userId = req.user.userId;
 
-            // Hashear la nueva contraseña antes de guardarla
             const salt = await bcrypt.genSalt(10);
             const hashedPassword = await bcrypt.hash(newPassword, salt);
 
@@ -157,5 +132,96 @@ router.patch(
         }
     }
 );
+
+// --- 2. AÑADIR NUEVAS RUTAS DE ADMINISTRACIÓN ---
+
+/**
+ * @swagger
+ * /api/users:
+ *   get:
+ *     summary: Obtiene una lista de todos los usuarios del sistema (Solo Administradores).
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       '200':
+ *         description: Lista de usuarios obtenida exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id: { type: integer }
+ *                   firstname: { type: string }
+ *                   lastname: { type: string }
+ *                   email: { type: string }
+ *                   role: { type: string }
+ *                   isActive: { type: boolean }
+ *                   createdat: { type: string, format: date-time }
+ */
+router.get('/', [verifyToken, checkAdmin], async (req, res, next) => {
+    try {
+        // Seleccionamos todos los usuarios pero excluimos las contraseñas
+        const query = `
+            SELECT id, firstname, lastname, email, role, "isActive", createdat, updatedat, "profileImageUrl"
+            FROM users
+            ORDER BY id ASC;
+        `;
+        const { rows } = await db.query(query);
+        res.status(200).json(rows);
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * @swagger
+ * /api/users/{id}:
+ *   delete:
+ *     summary: Desactiva (archiva) un usuario (Borrado Lógico, Solo Administradores).
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *         description: El ID del usuario a desactivar.
+ *     responses:
+ *       '200':
+ *         description: Usuario archivado exitosamente.
+ *       '403':
+ *         description: No se puede desactivar a uno mismo.
+ *       '404':
+ *         description: Usuario no encontrado.
+ */
+router.delete('/:id', [verifyToken, checkAdmin], async (req, res, next) => {
+    try {
+        const adminUserId = req.user.userId;
+        const userIdToDelete = parseInt(req.params.id, 10);
+
+        // Medida de seguridad: Un administrador no puede desactivarse a sí mismo.
+        if (adminUserId === userIdToDelete) {
+            return res.status(403).json({ message: 'No puedes desactivar tu propia cuenta de administrador.' });
+        }
+
+        const query = `
+            UPDATE users SET "isActive" = FALSE, updatedat = CURRENT_TIMESTAMP
+            WHERE id = $1 RETURNING id;
+        `;
+        const result = await db.query(query, [userIdToDelete]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'Usuario no encontrado para archivar.' });
+        }
+        
+        res.status(200).json({ message: 'Usuario archivado exitosamente.' });
+    } catch (error) {
+        next(error);
+    }
+});
 
 module.exports = router;
