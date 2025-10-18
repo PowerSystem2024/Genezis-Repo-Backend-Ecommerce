@@ -31,21 +31,42 @@ const mpClient = new MercadoPagoConfig({
  *     responses:
  *       '200':
  *         description: Lista de órdenes con los nombres de los clientes.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id: { type: integer }
+ *                   firstname: { type: string }
+ *                   lastname: { type: string }
+ *                   email: { type: string }
+ *                   totalamount: { type: number }
+ *                   status: { type: string }
+ *                   paymentgatewayid: { type: string }
+ *                   createdat: { type: string, format: date-time }
  */
 router.get('/', [verifyToken, checkAdmin], async (req, res, next) => {
     try {
+        // --- INICIO DE LA MODIFICACIÓN ---
+        // Se añaden o.paymentgatewayid y u.email a la consulta para que la respuesta sea completa.
         const query = `
             SELECT 
                 o.id,
                 u.firstname,
                 u.lastname,
+                u.email,
                 o.totalamount,
                 o.status,
+                o.paymentgatewayid,
                 o.createdat
             FROM orders o
             JOIN users u ON o.userid = u.id
             ORDER BY o.createdat DESC;
         `;
+        // --- FIN DE LA MODIFICACIÓN ---
+
         const { rows } = await db.query(query);
         res.status(200).json(rows);
     } catch (error) {
@@ -149,27 +170,11 @@ router.get('/:id', verifyToken, async (req, res, next) => {
  *           schema:
  *             type: object
  *             properties:
- *               userId:
- *                 type: integer
- *               status:
- *                 type: string
- *                 example: "paid"
- *               totalAmount:
- *                 type: number
- *               paymentGatewayId:
- *                 type: string
- *                 example: "Transferencia-123"
- *               items:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     productId:
- *                       type: integer
- *                     quantity:
- *                       type: integer
- *                     priceAtPurchase:
- *                       type: number
+ *               userId: { type: integer }, status: { type: string, example: "paid" },
+ *               totalAmount: { type: number }, paymentGatewayId: { type: string, example: "Transferencia-123" },
+ *               items: { type: array, items: { type: object, properties: { 
+ *                 productId: { type: integer }, quantity: { type: integer }, priceAtPurchase: { type: number }
+ *               }}}
  *     responses:
  *       '201':
  *         description: Orden creada exitosamente.
@@ -221,9 +226,7 @@ router.post('/', [verifyToken, checkAdmin], async (req, res, next) => {
  *           schema:
  *             type: object
  *             properties:
- *               status:
- *                 type: string
- *                 enum: ["pending", "paid", "shipped", "cancelled"]
+ *               status: { type: string, enum: ["pending", "paid", "shipped", "cancelled"] }
  *     responses:
  *       '200':
  *         description: Estado de la orden actualizado.
@@ -254,19 +257,14 @@ router.put('/:id/status', [verifyToken, checkAdmin], async (req, res, next) => {
  *   post:
  *     summary: Webhook para recibir notificaciones de pago de Mercado Pago.
  *     tags: [Orders]
- *     description: Este endpoint es para uso exclusivo de la API de Mercado Pago. No debe ser llamado directamente desde el frontend.
+ *     description: Este endpoint es para uso exclusivo de la API de Mercado Pago. No debe ser llamado directamente.
  *     requestBody:
  *       description: Payload enviado por Mercado Pago.
  *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
+ *       content: { "application/json": { schema: { type: object } } }
  *     responses:
  *       '200':
  *         description: Notificación recibida.
- *       '500':
- *         description: Error al procesar la notificación.
  */
 router.post('/webhook/mercadopago', async (req, res) => {
     const { type, data } = req.body;
