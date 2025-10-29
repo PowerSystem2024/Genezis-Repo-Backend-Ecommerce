@@ -25,7 +25,8 @@ const app = express();
 // --- CONFIGURACIÓN DE CORS MEJORADA ---
 const allowedOrigins = [
   process.env.CORS_ALLOWED_ORIGIN_DEV || 'http://localhost:5173', // Origen de desarrollo (con fallback)
-  process.env.CORS_ALLOWED_ORIGIN_PROD || 'https://gamerstore-genezis.vercel.app' // Origen de producción (con fallback)
+  process.env.CORS_ALLOWED_ORIGIN_PROD || 'https://gamerstore-genezis.vercel.app',
+  process.env.CORS_ALLOWED_ORIGIN_DOCS || 'https://backend-genezis.onrender.com/' // Origen para documentación Swagger (con fallback)
 ].filter(Boolean); // Filtra por si alguna variable no está definida
 
 const corsOptions = {
