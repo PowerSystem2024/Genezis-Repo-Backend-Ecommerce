@@ -294,6 +294,15 @@ router.post('/webhook/mercadopago', async (req, res) => {
                     quantity: parseInt(item.quantity),
                     priceAtPurchase: parseFloat(item.unit_price)
                 }));
+
+                // --- MODIFICACIÓN 2: Obtenemos datos del usuario para n8n ---
+                const userResult = await db.query('SELECT firstname, email FROM users WHERE id = $1', [userId]);
+                if (userResult.rows.length === 0) {
+                     console.error(`Webhook MP: No se encontró el usuario con ID: ${userId} para notificar a n8n.`);
+                }
+                const userData = userResult.rows[0] || { firstname: 'Usuario', email: null };
+                // --- FIN DE LA MODIFICACIÓN 2 ---
+
                 const client = await db.getClient();
                 try {
                     await client.query('BEGIN');
@@ -308,6 +317,28 @@ router.post('/webhook/mercadopago', async (req, res) => {
                     }
                     await client.query('COMMIT');
                     console.log(`Orden ${newOrderId} creada automáticamente por Webhook MP.`);
+
+                    // --- MODIFICACIÓN 3: Disparar Webhook a n8n (Fire-and-Forget) ---
+                    if (userData.email && process.env.N8N_ORDER_WEBHOOK_URL) {
+                        try {
+                            const n8nPayload = {
+                                email: userData.email,
+                                firstName: userData.firstname,
+                                orderId: newOrderId,
+                                totalAmount: totalAmount,
+                                items: items 
+                            };
+                            
+                            await axios.post(process.env.N8N_ORDER_WEBHOOK_URL, n8nPayload);
+                            
+                            console.log(`Webhook de n8n para orden ${newOrderId} disparado exitosamente.`);
+
+                        } catch (n8nError) {
+                            console.error(`Error al disparar webhook de n8n para orden ${newOrderId}:`, n8nError.message);
+                        }
+                    }
+                    // --- FIN DE LA MODIFICACIÓN 3 ---
+
                 } catch (txError) {
                     await client.query('ROLLBACK');
                     console.error('Webhook MP: Error en la transacción, rollback ejecutado:', txError);
