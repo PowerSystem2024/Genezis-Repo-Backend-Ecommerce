@@ -3,7 +3,7 @@ const swaggerJsdoc = require('swagger-jsdoc');
 
 // Determinamos la URL del servidor basándonos en el entorno
 const serverUrl = process.env.NODE_ENV === 'production'
-    ? 'https://backend-genezis.onrender.com' //  URL de producción en Render
+    ? 'https://genezis-repo-backend-ecommerce-production.up.railway.app' //  URL de producción en Render
     : 'http://localhost:3000';              //  URL de desarrollo local
 
 const options = {
