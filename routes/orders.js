@@ -403,7 +403,7 @@ router.post('/webhook/mercadopago', async (req, res) => {
                             firstName: userData.firstname,
                             orderId: newOrderId,
                             totalAmount: totalAmount,
-                            items: items,
+                            items: itemsWithNames,
                             paymentId: paymentId
                         };
                         
