@@ -1,24 +1,92 @@
 // Archivo: routes/orders.js
 const express = require('express');
 const { MercadoPagoConfig, Payment } = require('mercadopago');
+const axios = require('axios'); // <-- MODIFICACIÓN 1: Añadido axios
 const db = require('../db');
 const verifyToken = require('../middleware/authMiddleware');
 const checkAdmin = require('../middleware/adminMiddleware');
-
 const router = express.Router();
-
-const mpClient = new MercadoPagoConfig({ 
-    accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN 
+const mpClient = new MercadoPagoConfig({
+    accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN
 });
 
 /**
  * @swagger
- * tags:
- *   name: Orders
- *   description: Gestión de órdenes de compra.
+ * components:
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ *   schemas:
+ *     OrderItem:
+ *       type: object
+ *       properties:
+ *         productId:
+ *           type: integer
+ *         quantity:
+ *           type: integer
+ *         priceAtPurchase:
+ *           type: number
+ *           format: float
+ *       required:
+ *         - productId
+ *         - quantity
+ *         - priceAtPurchase
+ *     OrderResponse:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: integer
+ *         firstname:
+ *           type: string
+ *         lastname:
+ *           type: string
+ *         email:
+ *           type: string
+ *         totalamount:
+ *           type: number
+ *           format: float
+ *         status:
+ *           type: string
+ *         paymentgatewayid:
+ *           type: string
+ *           nullable: true
+ *         createdat:
+ *           type: string
+ *           format: date-time
+ *     FullOrderResponse:
+ *       allOf:
+ *         - $ref: '#/components/schemas/OrderResponse'
+ *         - type: object
+ *           properties:
+ *             userid:
+ *               type: integer
+ *             items:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   quantity:
+ *                     type: integer
+ *                   priceatpurchase:
+ *                     type: number
+ *                     format: float
+ *                   productId:
+ *                     type: integer
+ *                   productName:
+ *                     type: string
+ *                   coverimageurl:
+ *                     type: string
+ *                     nullable: true
  */
 
-// --- RUTAS DE CONSULTA ---
+/**
+ * @swagger
+ * tags:
+ *   - name: Orders
+ *     description: Gestión de órdenes de compra.
+ */
 
 /**
  * @swagger
@@ -30,27 +98,22 @@ const mpClient = new MercadoPagoConfig({
  *       - bearerAuth: []
  *     responses:
  *       '200':
- *         description: Lista de órdenes con los nombres de los clientes.
+ *         description: Lista de órdenes con nombres de clientes.
  *         content:
  *           application/json:
  *             schema:
  *               type: array
  *               items:
- *                 type: object
- *                 properties:
- *                   id: { type: integer }
- *                   firstname: { type: string }
- *                   lastname: { type: string }
- *                   email: { type: string }
- *                   totalamount: { type: number }
- *                   status: { type: string }
- *                   paymentgatewayid: { type: string }
- *                   createdat: { type: string, format: date-time }
+ *                 $ref: '#/components/schemas/OrderResponse'
+ *       '401':
+ *         description: No autorizado (falta token).
+ *       '403':
+ *         description: Prohibido (no es administrador).
  */
 router.get('/', [verifyToken, checkAdmin], async (req, res, next) => {
     try {
         const query = `
-            SELECT 
+            SELECT
                 o.id,
                 u.firstname,
                 u.lastname,
@@ -80,13 +143,20 @@ router.get('/', [verifyToken, checkAdmin], async (req, res, next) => {
  *       - bearerAuth: []
  *     responses:
  *       '200':
- *         description: Lista de órdenes del usuario.
+ *         description: Lista de órdenes del usuario autenticado.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/OrderResponse'
+ *       '401':
+ *         description: No autorizado.
  */
 router.get('/my-orders', verifyToken, async (req, res, next) => {
     try {
-        const userId = req.user.userId;
         const query = 'SELECT * FROM orders WHERE userID = $1 ORDER BY createdAt DESC;';
-        const { rows } = await db.query(query, [userId]);
+        const { rows } = await db.query(query, [req.user.userId]);
         res.status(200).json(rows);
     } catch (error) {
         next(error);
@@ -97,7 +167,7 @@ router.get('/my-orders', verifyToken, async (req, res, next) => {
  * @swagger
  * /api/orders/{id}:
  *   get:
- *     summary: Obtiene el detalle completo de una orden específica (Admin y usuario propietario).
+ *     summary: Obtiene el detalle completo de una orden específica (Admin o propietario).
  *     tags: [Orders]
  *     security:
  *       - bearerAuth: []
@@ -105,10 +175,22 @@ router.get('/my-orders', verifyToken, async (req, res, next) => {
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: integer }
+ *         schema:
+ *           type: integer
+ *         description: ID de la orden.
  *     responses:
  *       '200':
  *         description: Detalle completo de la orden.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/FullOrderResponse'
+ *       '401':
+ *         description: No autorizado.
+ *       '403':
+ *         description: Prohibido (no eres propietario ni administrador).
+ *       '404':
+ *         description: Orden no encontrada.
  */
 router.get('/:id', verifyToken, async (req, res, next) => {
     try {
@@ -130,7 +212,7 @@ router.get('/:id', verifyToken, async (req, res, next) => {
             return res.status(403).json({ message: 'No tienes permiso para ver esta orden.' });
         }
         const orderDetailsQuery = `
-            SELECT 
+            SELECT
                 od.quantity,
                 od.priceatpurchase,
                 p.id as "productId",
@@ -163,31 +245,47 @@ router.get('/:id', verifyToken, async (req, res, next) => {
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - userId
+ *               - status
+ *               - totalAmount
+ *               - items
  *             properties:
  *               userId:
  *                 type: integer
  *               status:
  *                 type: string
- *                 example: "paid"
+ *                 enum: [pending, paid, shipped, cancelled]
+ *                 example: paid
  *               totalAmount:
  *                 type: number
+ *                 format: float
  *               paymentGatewayId:
  *                 type: string
+ *                 nullable: true
  *                 example: "Transferencia-123"
  *               items:
  *                 type: array
  *                 items:
- *                   type: object
- *                   properties:
- *                     productId:
- *                       type: integer
- *                     quantity:
- *                       type: integer
- *                     priceAtPurchase:
- *                       type: number
+ *                   $ref: '#/components/schemas/OrderItem'
  *     responses:
  *       '201':
  *         description: Orden creada exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 orderId:
+ *                   type: integer
+ *       '400':
+ *         description: Faltan datos requeridos.
+ *       '401':
+ *         description: No autorizado.
+ *       '403':
+ *         description: Prohibido (no es administrador).
  */
 router.post('/', [verifyToken, checkAdmin], async (req, res, next) => {
     const { userId, status, totalAmount, paymentGatewayId, items } = req.body;
@@ -197,13 +295,13 @@ router.post('/', [verifyToken, checkAdmin], async (req, res, next) => {
     const client = await db.getClient();
     try {
         await client.query('BEGIN');
-        const orderQuery = `INSERT INTO Orders (userID, totalAmount, status, paymentGatewayID) VALUES ($1, $2, $3, $4) RETURNING id;`;
+        const orderQuery = `INSERT INTO orders (userID, totalAmount, status, paymentGatewayID) VALUES ($1, $2, $3, $4) RETURNING id;`;
         const orderResult = await client.query(orderQuery, [userId, totalAmount, status, paymentGatewayId]);
         const newOrderId = orderResult.rows[0].id;
         for (const item of items) {
-            const detailQuery = `INSERT INTO OrderDetails (orderID, productID, quantity, priceAtPurchase) VALUES ($1, $2, $3, $4);`;
+            const detailQuery = `INSERT INTO orderdetails (orderID, productID, quantity, priceAtPurchase) VALUES ($1, $2, $3, $4);`;
             await client.query(detailQuery, [newOrderId, item.productId, item.quantity, item.priceAtPurchase]);
-            const stockQuery = 'UPDATE Products SET stock = stock - $1 WHERE id = $2;';
+            const stockQuery = 'UPDATE products SET stock = stock - $1 WHERE id = $2;';
             await client.query(stockQuery, [item.quantity, item.productId]);
         }
         await client.query('COMMIT');
@@ -228,20 +326,41 @@ router.post('/', [verifyToken, checkAdmin], async (req, res, next) => {
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: integer }
+ *         schema:
+ *           type: integer
+ *         description: ID de la orden.
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - status
  *             properties:
  *               status:
  *                 type: string
- *                 enum: ["pending", "paid", "shipped", "cancelled"]
+ *                 enum: [pending, paid, shipped, cancelled]
  *     responses:
  *       '200':
- *         description: Estado de la orden actualizado.
+ *         description: Estado actualizado correctamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 order:
+ *                   $ref: '#/components/schemas/OrderResponse'
+ *       '400':
+ *         description: Estado no válido.
+ *       '404':
+ *         description: Orden no encontrada.
+ *       '401':
+ *         description: No autorizado.
+ *       '403':
+ *         description: Prohibido.
  */
 router.put('/:id/status', [verifyToken, checkAdmin], async (req, res, next) => {
     try {
@@ -250,7 +369,7 @@ router.put('/:id/status', [verifyToken, checkAdmin], async (req, res, next) => {
         if (!status || !["pending", "paid", "shipped", "cancelled"].includes(status)) {
             return res.status(400).json({ message: "Estado no válido." });
         }
-        const query = 'UPDATE Orders SET status = $1, updatedAt = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *;';
+        const query = 'UPDATE orders SET status = $1, updatedAt = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *;';
         const { rows } = await db.query(query, [status, id]);
         if (rows.length === 0) {
             return res.status(404).json({ message: "Orden no encontrada." });
@@ -265,19 +384,32 @@ router.put('/:id/status', [verifyToken, checkAdmin], async (req, res, next) => {
  * @swagger
  * /api/orders/webhook/mercadopago:
  *   post:
- *     summary: Webhook para recibir notificaciones de pago de Mercado Pago.
+ *     summary: Webhook para notificaciones de pago de Mercado Pago.
+ *     description: |
+ *       **Solo debe ser llamado por Mercado Pago.** Procesa pagos aprobados y crea órdenes automáticamente.
+ *       No requiere autenticación. Usa `external_reference` como `userId`.
  *     tags: [Orders]
- *     description: Este endpoint es para uso exclusivo de la API de Mercado Pago. No debe ser llamado directamente.
  *     requestBody:
- *       description: Payload enviado por Mercado Pago.
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
+ *             properties:
+ *               type:
+ *                 type: string
+ *                 example: payment
+ *               data:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                     description: ID del pago en Mercado Pago.
  *     responses:
  *       '200':
- *         description: Notificación recibida.
+ *         description: Notificación recibida y procesada.
+ *       '500':
+ *         description: Error interno al procesar el pago.
  */
 router.post('/webhook/mercadopago', async (req, res) => {
     const { type, data } = req.body;
@@ -294,31 +426,23 @@ router.post('/webhook/mercadopago', async (req, res) => {
                     quantity: parseInt(item.quantity),
                     priceAtPurchase: parseFloat(item.unit_price)
                 }));
-
-                // --- MODIFICACIÓN 2: Obtenemos datos del usuario para n8n ---
                 const userResult = await db.query('SELECT firstname, email FROM users WHERE id = $1', [userId]);
-                if (userResult.rows.length === 0) {
-                     console.error(`Webhook MP: No se encontró el usuario con ID: ${userId} para notificar a n8n.`);
-                }
                 const userData = userResult.rows[0] || { firstname: 'Usuario', email: null };
-                // --- FIN DE LA MODIFICACIÓN 2 ---
-
                 const client = await db.getClient();
                 try {
                     await client.query('BEGIN');
-                    const orderQuery = `INSERT INTO Orders (userID, totalAmount, status, paymentGatewayID) VALUES ($1, $2, 'paid', $3) RETURNING id;`;
+                    const orderQuery = `INSERT INTO orders (userID, totalAmount, status, paymentGatewayID) VALUES ($1, $2, 'paid', $3) RETURNING id;`;
                     const orderResult = await client.query(orderQuery, [userId, totalAmount, paymentId]);
                     const newOrderId = orderResult.rows[0].id;
                     for (const item of items) {
-                        const detailQuery = `INSERT INTO OrderDetails (orderID, productID, quantity, priceAtPurchase) VALUES ($1, $2, $3, $4);`;
+                        const detailQuery = `INSERT INTO orderdetails (orderID, productID, quantity, priceAtPurchase) VALUES ($1, $2, $3, $4);`;
                         await client.query(detailQuery, [newOrderId, item.productId, item.quantity, item.priceAtPurchase]);
-                        const stockQuery = 'UPDATE Products SET stock = stock - $1 WHERE id = $2;';
+                        const stockQuery = 'UPDATE products SET stock = stock - $1 WHERE id = $2;';
                         await client.query(stockQuery, [item.quantity, item.productId]);
                     }
                     await client.query('COMMIT');
                     console.log(`Orden ${newOrderId} creada automáticamente por Webhook MP.`);
 
-                    // --- MODIFICACIÓN 3: Disparar Webhook a n8n (Fire-and-Forget) ---
                     if (userData.email && process.env.N8N_ORDER_WEBHOOK_URL) {
                         try {
                             const n8nPayload = {
@@ -326,19 +450,14 @@ router.post('/webhook/mercadopago', async (req, res) => {
                                 firstName: userData.firstname,
                                 orderId: newOrderId,
                                 totalAmount: totalAmount,
-                                items: items 
+                                items: items
                             };
-                            
                             await axios.post(process.env.N8N_ORDER_WEBHOOK_URL, n8nPayload);
-                            
                             console.log(`Webhook de n8n para orden ${newOrderId} disparado exitosamente.`);
-
                         } catch (n8nError) {
                             console.error(`Error al disparar webhook de n8n para orden ${newOrderId}:`, n8nError.message);
                         }
                     }
-                    // --- FIN DE LA MODIFICACIÓN 3 ---
-
                 } catch (txError) {
                     await client.query('ROLLBACK');
                     console.error('Webhook MP: Error en la transacción, rollback ejecutado:', txError);
