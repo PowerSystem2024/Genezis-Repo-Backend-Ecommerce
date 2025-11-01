@@ -1,9 +1,8 @@
-// Archivo: services/aiSpecGenerator.js (NUEVO ARCHIVO)
+// Archivo: services/aiSpecGenerator.js (Corregido y Mejorado)
 require('dotenv').config();
 const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@google/generative-ai');
 
 // 1. Inicialización del Cliente de IA
-// Asegurarnos de que la variable de entorno está cargada
 const API_KEY = process.env.GOOGLE_API_KEY;
 if (!API_KEY) {
     console.error("Error: GOOGLE_API_KEY no está definida en .env. El servicio de IA no funcionará.");
@@ -11,7 +10,7 @@ if (!API_KEY) {
 
 const genAI = new GoogleGenerativeAI(API_KEY);
 
-// Configuración de seguridad para el modelo (bloquear contenido sensible)
+// Configuración de seguridad
 const safetySettings = [
     { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
     { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
@@ -21,35 +20,25 @@ const safetySettings = [
 
 /**
  * Limpia la respuesta de la IA para extraer únicamente el bloque JSON.
- * La IA a veces envuelve la respuesta en ```json ... ```
  * @param {string} rawText - La respuesta de texto cruda del modelo.
  * @returns {string} - El string JSON limpio.
  */
 function cleanAiResponse(rawText) {
-    // Buscar el inicio de un bloque de código JSON
     const jsonMatch = rawText.match(/```(json)?([\s\S]*?)```/);
-    
     if (jsonMatch && jsonMatch[2]) {
-        // Si encuentra un bloque ```json ... ```, devuelve el contenido
         return jsonMatch[2].trim();
     }
-    
-    // Si no, asumimos que la respuesta es JSON crudo (o un intento de)
-    // Intentamos encontrar el primer '{' y el último '}'
     const firstBrace = rawText.indexOf('{');
     const lastBrace = rawText.lastIndexOf('}');
-    
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
         return rawText.substring(firstBrace, lastBrace + 1).trim();
     }
-
-    // Si todo falla, devolvemos el texto original
     return rawText;
 }
 
 /**
  * Llama a la API de Gemini para generar especificaciones de producto.
- * @param {string} productName - El nombre del producto (ej. "RTX 5070 ti").
+ * @param {string} productName - El nombre del producto (ej. "RTX 4070").
  * @returns {Promise<object>} - El objeto JSON con las especificaciones.
  */
 async function generateSpecsForProduct(productName) {
@@ -59,19 +48,26 @@ async function generateSpecsForProduct(productName) {
     
     try {
         const model = genAI.getGenerativeModel({ 
-            model: "gemini-2.5-flash", 
+            model: "gemini-1.5-flash",
             safetySettings 
         });
 
-        // 2. Definición del Prompt (clave para el éxito)
-        const prompt = `Eres un experto en hardware de PC y componentes de e-commerce. 
-Extrae las especificaciones técnicas clave para el producto: "${productName}".
-Devuelve la respuesta únicamente como un objeto JSON estructurado. 
-Agrupa las especificaciones por categorías lógicas (ej. "CARACTERISTICAS GENERALES", "ESPECIFICACIONES DE LA CPU", "MEMORIA").
-Las claves del JSON deben estar en MAYÚSCULAS y los valores deben ser strings o números.
-No incluyas explicaciones, solo el objeto JSON.
+        // ========= INICIO DE LA MODIFICACIÓN DEL PROMPT =========
+        const prompt = `Eres un experto en hardware de PC y componentes de e-commerce.
+Tu tarea es extraer las especificaciones técnicas CLAVE para el producto: "${productName}".
 
-Ejemplo de formato esperado:
+REGLAS:
+1.  Devuelve la respuesta ÚNICAMENTE como un objeto JSON estructurado.
+2.  Agrupa las especificaciones por categorías lógicas (ej. "CARACTERISTICAS GENERALES", "ESPECIFICACIONES", "MEMORIA").
+3.  Las claves de grupo (categorías) deben estar en MAYÚSCULAS.
+4.  Los valores deben ser strings o números.
+
+MUY IMPORTANTE:
+Solo extrae especificaciones de productos que ya han sido lanzados oficialmente y tienen datos públicos confirmados. 
+Si el producto es un rumor, es especulativo, o no ha sido anunciado (como "RTX 5070 ti" o "Ryzen 10"), NO ADIVINES.
+En lugar de devolver "NO DISPONIBLE" o "RUMOREADO", simplemente devuelve un objeto JSON vacío: {}.
+
+Ejemplo de producto EXISTENTE ("Ryzen 5 8600G"):
 {
   "CARACTERISTICAS GENERALES": {
     "Modelo": "Ryzen 5 8600G",
@@ -81,7 +77,12 @@ Ejemplo de formato esperado:
     "Núcleos": 6,
     "Frecuencia": "4.3 GHz"
   }
-}`;
+}
+
+Ejemplo de producto ESPECULATIVO ("RTX 5070 ti"):
+{}
+`;
+        // ========= FIN DE LA MODIFICACIÓN DEL PROMPT =========
 
         // 3. Llamada a la API
         const result = await model.generateContent(prompt);
@@ -92,7 +93,14 @@ Ejemplo de formato esperado:
         const cleanedText = cleanAiResponse(rawText);
         
         try {
-            const jsonObject = JSON.parse(cleanedText);
+            // Si el texto limpio es solo "{}" o está vacío, parseará bien
+            const jsonObject = JSON.parse(cleanedText || "{}");
+            
+            // Verificamos si la IA obedeció y devolvió un objeto vacío
+            if (Object.keys(jsonObject).length === 0) {
+                 console.log(`[AI Specs] La IA determinó que el producto "${productName}" es especulativo o no tiene datos. Se guardará un JSON vacío.`);
+            }
+
             return jsonObject;
         } catch (parseError) {
             console.error("Error: La IA no devolvió un JSON válido.", cleanedText);
