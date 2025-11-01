@@ -1,4 +1,4 @@
--- Archivo: create_tables.sql (Versión Corregida y Sincronizada)
+-- Archivo: sql/create_tables.sql (Completo y Actualizado)
 
 -- Borrado de tablas existentes (opcional, para empezar de cero en la nube)
 DROP TABLE IF EXISTS OrderDetails CASCADE;
@@ -18,7 +18,7 @@ CREATE TABLE Users (
                        email VARCHAR(255) UNIQUE NOT NULL,
                        password VARCHAR(255) NOT NULL,
                        role VARCHAR(50) NOT NULL DEFAULT 'customer' CHECK (role IN ('admin', 'customer')),
-                       "isActive" BOOLEAN NOT NULL DEFAULT TRUE, -- CAMPO AÑADIDO
+                       "isActive" BOOLEAN NOT NULL DEFAULT TRUE,
                        createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                        updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -44,12 +44,17 @@ CREATE TABLE Products (
                           price DECIMAL(10, 2) NOT NULL,
                           stock INTEGER NOT NULL DEFAULT 0,
                           coverimageurl VARCHAR(255),
-                          "isActive" BOOLEAN NOT NULL DEFAULT TRUE, -- CAMPO AÑADIDO
-                          categoryid INTEGER, -- Columna en minúscula
+                          "isActive" BOOLEAN NOT NULL DEFAULT TRUE,
+                          categoryid INTEGER,
+                          
+                          -- ========= NUEVA COLUMNA AÑADIDA =========
+                          specs JSONB DEFAULT NULL, 
+                          -- =========================================
+
                           createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                           updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                           CONSTRAINT fk_category
-                              FOREIGN KEY(categoryid) -- Columna en minúscula
+                              FOREIGN KEY(categoryid)
                                   REFERENCES Categories(id)
                                   ON DELETE SET NULL
 );
@@ -61,11 +66,11 @@ CREATE TABLE ProductImages (
                                id SERIAL PRIMARY KEY,
                                imageurl VARCHAR(255) NOT NULL,
                                alttext VARCHAR(255),
-                               productid INTEGER NOT NULL, -- Columna en minúscula
+                               productid INTEGER NOT NULL,
                                createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                                updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                                CONSTRAINT fk_product
-                                   FOREIGN KEY(productid) -- Columna en minúscula
+                                   FOREIGN KEY(productid)
                                        REFERENCES Products(id)
                                        ON DELETE CASCADE
 );
@@ -75,14 +80,14 @@ CREATE TABLE ProductImages (
 -- -----------------------------------------------------
 CREATE TABLE Orders (
                         id SERIAL PRIMARY KEY,
-                        userid INTEGER NOT NULL, -- Columna en minúscula
+                        userid INTEGER NOT NULL,
                         totalamount DECIMAL(10, 2) NOT NULL,
                         status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'shipped', 'cancelled')),
                         paymentgatewayid VARCHAR(255),
                         createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         CONSTRAINT fk_user
-                            FOREIGN KEY(userid) -- Columna en minúscula
+                            FOREIGN KEY(userid)
                                 REFERENCES Users(id)
                                 ON DELETE CASCADE
 );
@@ -92,16 +97,16 @@ CREATE TABLE Orders (
 -- -----------------------------------------------------
 CREATE TABLE OrderDetails (
                               id SERIAL PRIMARY KEY,
-                              orderid INTEGER NOT NULL, -- Columna en minúscula
+                              orderid INTEGER NOT NULL,
                               productid INTEGER,
                               quantity INTEGER NOT NULL,
                               priceatpurchase DECIMAL(10, 2) NOT NULL,
                               CONSTRAINT fk_order
-                                  FOREIGN KEY(orderid) -- Columna en minúscula
+                                  FOREIGN KEY(orderid)
                                       REFERENCES Orders(id)
                                       ON DELETE CASCADE,
                               CONSTRAINT fk_product_detail
-                                  FOREIGN KEY(productid) -- Columna en minúscula
+                                  FOREIGN KEY(productid)
                                       REFERENCES Products(id)
                                       ON DELETE RESTRICT
 );

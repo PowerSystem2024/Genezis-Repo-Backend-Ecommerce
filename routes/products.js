@@ -1,8 +1,10 @@
-// Archivo: routes/products.js
+// Archivo: routes/products.js (Completo y Actualizado)
 const express = require('express');
 const db = require('../db');
 const verifyToken = require('../middleware/authMiddleware');
 const checkAdmin = require('../middleware/adminMiddleware');
+// --- NUEVA IMPORTACIÓN DEL SERVICIO DE IA ---
+const { generateSpecsForProduct } = require('../services/aiSpecGenerator');
 // Importaciones para la subida de archivos y validación
 const upload = require('../middleware/upload');
 const cloudinary = require('../config/cloudinaryConfig');
@@ -100,11 +102,11 @@ router.get('/admin/all', [verifyToken, checkAdmin], async (req, res, next) => {
  *         description: ID del producto
  *     responses:
  *       '200':
- *         description: Detalles del producto con su galería de imágenes.
+ *         description: Detalles del producto con su galería y especificaciones.
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/ProductWithGallery'
+ *               $ref: '#/components/schemas/ProductWithGalleryAndSpecs'
  *       '404':
  *         description: Producto no encontrado.
  */
@@ -112,7 +114,7 @@ router.get('/:id', idParamValidationRules(), validate, async (req, res, next) =>
     try {
         const { id } = req.params;
         const productQuery = `
-            SELECT p.*, c.name AS "categoryName"
+            SELECT p.*, p.specs, c.name AS "categoryName"
             FROM products p
             LEFT JOIN categories c ON p.categoryid = c.id
             WHERE p.id = $1;
@@ -121,7 +123,9 @@ router.get('/:id', idParamValidationRules(), validate, async (req, res, next) =>
         if (productRows.length === 0) {
             return res.status(404).json({ message: 'Producto no encontrado.' });
         }
+       
         const product = productRows[0];
+       
         const galleryQuery = `
             SELECT id, imageurl, alttext
             FROM productimages
@@ -129,12 +133,82 @@ router.get('/:id', idParamValidationRules(), validate, async (req, res, next) =>
             ORDER BY id ASC;
         `;
         const { rows: galleryImages } = await db.query(galleryQuery, [id]);
+       
         product.gallery = galleryImages || [];
-        res.status(200).json(product);
+       
+        res.status( post200).json(product);
     } catch (error) {
         next(error);
     }
 });
+
+/**
+ * @swagger
+ * /api/products/{id}/generate-specs:
+ *   post:
+ *     summary: Genera y guarda especificaciones de IA para un producto (Solo Administradores).
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID del producto para generar especificaciones.
+ *     responses:
+ *       '200':
+ *         description: Especificaciones generadas y guardadas exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               description: Objeto JSON con las especificaciones técnicas generadas por IA.
+ *               example:
+ *                 CARACTERISTICAS GENERALES:
+ *                   Modelo: "Ryzen 5 8600G"
+ *                   Socket: "AM5"
+ *                 ESPECIFICACIONES DE LA CPU:
+ *                   Núcleos: 6
+ *                   Hilos: 12
+ *                   Frecuencia Base: "3.9 GHz"
+ *       '404':
+ *         description: Producto no encontrado.
+ *       '500':
+ *         description: Error al contactar el servicio de IA o al guardar los datos.
+ */
+router.post(
+    '/:id/generate-specs',
+    [verifyToken, checkAdmin, idParamValidationRules(), validate],
+    async (req, res, next) => {
+        try {
+            const { id } = req.params;
+            const productQuery = 'SELECT id, name FROM products WHERE id = $1;';
+            const { rows: productRows } = await db.query(productQuery, [id]);
+            if (productRows.length === 0) {
+                return res.status(404).json({ message: 'Producto no encontrado.' });
+            }
+           
+            const productName = productRows[0].name;
+            console.log(`[AI Specs] Iniciando generación para: ${productName} (ID: ${id})`);
+            const specsJson = await generateSpecsForProduct(productName);
+           
+            console.log(`[AI Specs] JSON recibido de la IA:`, specsJson);
+            const updateQuery = `
+                UPDATE products
+                SET specs = $1, updatedat = CURRENT_TIMESTAMP
+                WHERE id = $2
+                RETURNING specs;
+            `;
+            const { rows: updatedRows } = await db.query(updateQuery, [specsJson, id]);
+            res.status(200).json(updatedRows[0].specs);
+        } catch (error) {
+            console.error(`[AI Specs] Error en el endpoint /generate-specs: ${error.message}`);
+            next(error);
+        }
+    }
+);
 
 /**
  * @swagger
@@ -354,7 +428,7 @@ router.delete('/:id', [verifyToken, checkAdmin], idParamValidationRules(), valid
             WHERE id = $1 RETURNING id;
         `;
         const result = await db.query(query, [id]);
-       
+      
         if (result.rowCount === 0) {
             return res.status(404).json({ message: 'Producto no encontrado para archivar.' });
         }
@@ -378,6 +452,7 @@ router.delete('/:id', [verifyToken, checkAdmin], idParamValidationRules(), valid
  *         required: true
  *         schema:
  *           type: integer
+ *         description: ID del producto
  *     requestBody:
  *       required: true
  *       content:
@@ -390,6 +465,7 @@ router.delete('/:id', [verifyToken, checkAdmin], idParamValidationRules(), valid
  *               productImage:
  *                 type: string
  *                 format: binary
+ *                 description: Nueva imagen de portada.
  *     responses:
  *       '200':
  *         description: Imagen de portada actualizada.
