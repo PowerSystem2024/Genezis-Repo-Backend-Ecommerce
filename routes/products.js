@@ -1,9 +1,9 @@
-// Archivo: routes/products.js (Completo y Actualizado)
+// Archivo: routes/products.js (Completo, Corregido y Actualizado con IA Specs)
 const express = require('express');
 const db = require('../db');
 const verifyToken = require('../middleware/authMiddleware');
 const checkAdmin = require('../middleware/adminMiddleware');
-// --- NUEVA IMPORTACIÓN DEL SERVICIO DE IA ---
+// --- Importación del Servicio de IA ---
 const { generateSpecsForProduct } = require('../services/aiSpecGenerator');
 // Importaciones para la subida de archivos y validación
 const upload = require('../middleware/upload');
@@ -136,7 +136,7 @@ router.get('/:id', idParamValidationRules(), validate, async (req, res, next) =>
        
         product.gallery = galleryImages || [];
        
-        res.status( post200).json(product);
+        res.status(200).json(product);
     } catch (error) {
         next(error);
     }
@@ -166,10 +166,10 @@ router.get('/:id', idParamValidationRules(), validate, async (req, res, next) =>
  *               type: object
  *               description: Objeto JSON con las especificaciones técnicas generadas por IA.
  *               example:
- *                 CARACTERISTICAS GENERALES:
+ *                 CARACTERISTICAS_GENERALES:
  *                   Modelo: "Ryzen 5 8600G"
  *                   Socket: "AM5"
- *                 ESPECIFICACIONES DE LA CPU:
+ *                 ESPECIFICACIONES_DE_LA_CPU:
  *                   Núcleos: 6
  *                   Hilos: 12
  *                   Frecuencia Base: "3.9 GHz"
