@@ -346,21 +346,33 @@ router.post('/webhook/mercadopago', async (req, res) => {
                 
                 console.log(`✅ Orden ${newOrderId} creada en la base de datos`);
                 
-                // Insertar detalles y actualizar stock
+                // Insertar detalles, actualizar stock y obtener nombres de productos
+                const itemsWithNames = [];
+                
                 for (const item of items) {
-                    // Verificar stock
-                    const stockCheck = await client.query(
-                        'SELECT stock FROM products WHERE id = $1',
+                    // MODIFICACIÓN: Obtener stock Y nombre del producto
+                    const productQuery = await client.query(
+                        'SELECT stock, name FROM products WHERE id = $1',
                         [item.productId]
                     );
                     
-                    if (stockCheck.rows.length === 0) {
+                    if (productQuery.rows.length === 0) {
                         throw new Error(`Producto ${item.productId} no encontrado`);
                     }
                     
-                    if (stockCheck.rows[0].stock < item.quantity) {
+                    const product = productQuery.rows[0];
+                    
+                    if (product.stock < item.quantity) {
                         throw new Error(`Stock insuficiente para producto ${item.productId}`);
                     }
+                    
+                    // Guardar item con nombre para enviar a n8n
+                    itemsWithNames.push({
+                        productId: item.productId,
+                        productName: product.name,
+                        quantity: item.quantity,
+                        priceAtPurchase: item.priceAtPurchase
+                    });
                     
                     // CORRECCIÓN: Nombres de columnas en minúscula
                     const detailQuery = `
@@ -377,7 +389,7 @@ router.post('/webhook/mercadopago', async (req, res) => {
                     const stockQuery = 'UPDATE products SET stock = stock - $1 WHERE id = $2;';
                     await client.query(stockQuery, [item.quantity, item.productId]);
                     
-                    console.log(`  ✓ Item procesado: Producto ${item.productId}, Cantidad: ${item.quantity}`);
+                    console.log(`  ✓ Item procesado: ${product.name} (ID: ${item.productId}), Cantidad: ${item.quantity}`);
                 }
                 
                 await client.query('COMMIT');
