@@ -1,5 +1,3 @@
-Aquí tienes el archivo `README.md` actualizado con todas las funcionalidades y cambios reflejados en los archivos de tu proyecto:
-
 # Genezis E-commerce - Backend API
 
 API RESTful robusta y escalable para la plataforma de e-commerce Genezis. Construida con Node.js, Express y PostgreSQL, esta API maneja la autenticación de usuarios, gestión dinámica de productos (con subida de imágenes a Cloudinary), gestión de perfiles de usuario, y un flujo de órdenes de compra completo integrado con Mercado Pago y webhooks de notificación (n8n), siguiendo las mejores prácticas de seguridad y desarrollo.
@@ -226,7 +224,6 @@ Este proyecto fue desarrollado por:
 
   * **Luciano Cortez**
   * **Fernando Alma**
-  * **Nicolas Fernandez**
 
 -----
 
