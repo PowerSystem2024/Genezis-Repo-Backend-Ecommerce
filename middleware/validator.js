@@ -33,7 +33,7 @@ const registerValidationRules = () => {
         // email debe ser un email válido
         body('email')
             .isEmail().withMessage('Debe ser una dirección de correo válida.')
-            .normalizeEmail(),
+            .normalizeEmail({ gmail_remove_dots: false }),
 
         // password debe tener al menos 6 caracteres
         body('password')
