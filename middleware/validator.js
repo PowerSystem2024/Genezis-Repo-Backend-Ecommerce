@@ -46,7 +46,7 @@ const loginValidationRules = () => {
     return [
         body('email')
             .isEmail().withMessage('Debe ser una dirección de correo válida.')
-            .normalizeEmail(),
+            .normalizeEmail({ gmail_remove_dots: false }),
         body('password')
             .notEmpty().withMessage('La contraseña es obligatoria.'),
     ];
