@@ -32,8 +32,8 @@ const registerValidationRules = () => {
 
         // email debe ser un email válido
         body('email')
-            .isEmail().withMessage('Debe ser una dirección de correo válida.'),
-            //.normalizeEmail({ gmail_remove_dots: false }),
+            .isEmail().withMessage('Debe ser una dirección de correo válida.')
+            .normalizeEmail(),
 
         // password debe tener al menos 6 caracteres
         body('password')
@@ -45,8 +45,8 @@ const registerValidationRules = () => {
 const loginValidationRules = () => {
     return [
         body('email')
-            .isEmail().withMessage('Debe ser una dirección de correo válida.'),
-            //.normalizeEmail({ gmail_remove_dots: false }),
+            .isEmail().withMessage('Debe ser una dirección de correo válida.')
+            .normalizeEmail(),
         body('password')
             .notEmpty().withMessage('La contraseña es obligatoria.'),
     ];
